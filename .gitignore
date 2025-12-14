@@ -1,0 +1,45 @@
+# Output files
+output/*.md
+!output/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# uv
+.python-version
+uv.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.zed/
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Sensitive data
+config.local.json
+*.backup
+
+# MCP testing
+.mcp_test/
+
+# Temporary files
+*.tmp
+.cache/

@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "zotero": {
+      "command": "zotero-mcp",
+      "args": [],
+      "env": {
+        "ZOTERO_DATA_DIR": "/Users/anthonytownsend/Zotero"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/anthonytownsend/Dropbox/Apps/Scrivener",
+        "/Users/anthonytownsend/code/_dev/book-chapter-planner"
+      ]
+    }
+  }
+}

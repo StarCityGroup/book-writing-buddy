@@ -1,0 +1,15 @@
+[project]
+name = "book-chapter-planner"
+version = "0.1.0"
+description = "AI-powered tool to analyze research materials for book chapter preparation"
+requires-python = ">=3.8"
+dependencies = [
+    "pick>=2.2.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]

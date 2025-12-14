@@ -1,0 +1,17 @@
+{
+  "scrivener_project": "/Users/anthonytownsend/Dropbox/Apps/Scrivener/FIREWALL.scriv",
+  "zotero_data_dir": "/Users/anthonytownsend/Zotero",
+  "output_dir": "./output",
+  "use_tui_pickers": true,
+  "zotero_root_collection": "FIREWALL",
+  "zotero_general_reference": "General Reference",
+  "zotero_incoming": "__incoming",
+  "zotero_chapter_pattern": "{number}. ",
+  "include_general_reference": true,
+  "analysis_sections": [
+    "key_points",
+    "great_facts",
+    "narrative_thread",
+    "bag_of_examples"
+  ]
+}
