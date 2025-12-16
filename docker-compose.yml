@@ -1,0 +1,36 @@
+services:
+  book-research-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: book-research-mcp
+
+    volumes:
+      # User's data directories (read-only)
+      - ${ZOTERO_DATA_PATH}:/mnt/zotero:ro
+      - ${SCRIVENER_PROJECT_PATH}:/mnt/scrivener:ro
+
+      # Persistent storage (read-write)
+      - ./data/vectordb:/data/vectordb
+      - ./data/logs:/data/logs
+
+      # Configuration files
+      - ./config:/app/config:ro
+      - ./config.local.json:/app/config.local.json:ro
+
+    environment:
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-mpnet-base-v2}
+      - VECTORDB_PATH=/data/vectordb
+      - DEBUG=${DEBUG:-false}
+      - ZOTERO_PATH=/mnt/zotero
+      - SCRIVENER_PATH=/mnt/scrivener
+
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

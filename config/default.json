@@ -1,0 +1,45 @@
+{
+  "embedding": {
+    "model": "all-MiniLM-L6-v2",
+    "chunk_size": 500,
+    "chunk_overlap": 100,
+    "batch_size": 32,
+    "vector_size": 384
+  },
+  "indexing": {
+    "file_patterns": {
+      "zotero_attachments": ["*.pdf", "*.txt", "*.html", "*.htm"],
+      "scrivener_docs": ["*.rtf", "*.txt", "*.scriv"]
+    },
+    "exclude_patterns": [
+      "*.tmp",
+      "*.bak",
+      ".DS_Store",
+      "Thumbs.db",
+      "Trash/*",
+      "*/Trash/*"
+    ],
+    "debounce_seconds": 5,
+    "max_file_size_mb": 50
+  },
+  "vectordb": {
+    "collection_name": "book_research",
+    "distance_metric": "cosine",
+    "index_params": {
+      "m": 16,
+      "ef_construct": 100
+    }
+  },
+  "mcp": {
+    "server_name": "book-research",
+    "default_search_limit": 20,
+    "relevance_threshold": 0.7,
+    "max_context_chunks": 50
+  },
+  "chunking": {
+    "strategy": "semantic",
+    "min_chunk_size": 200,
+    "max_chunk_size": 800,
+    "sentence_overlap": 2
+  }
+}

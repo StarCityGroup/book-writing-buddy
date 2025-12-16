@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "book-research": {
+      "command": "docker",
+      "args": ["exec", "-i", "-e", "MCP_MODE=stdio", "book-research-mcp", "python", "src/mcp_server.py"]
+    }
+  }
+}

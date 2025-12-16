@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Book Research MCP Configuration",
+  "description": "Configuration schema for project-specific settings",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "object",
+      "description": "Project metadata",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Your book or project name"
+        },
+        "author": {
+          "type": "string",
+          "description": "Author name"
+        }
+      }
+    },
+    "zotero": {
+      "type": "object",
+      "description": "Zotero-specific configuration",
+      "properties": {
+        "root_collection": {
+          "type": "string",
+          "description": "Name of your root Zotero collection (e.g., 'My Book')"
+        },
+        "chapter_pattern": {
+          "type": "string",
+          "description": "Regex pattern to match chapter numbers in collection names (e.g., '^(\\d+)\\.' matches '9. chapter title')"
+        },
+        "exclude_collections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Collection names to exclude from indexing (e.g., ['_incoming', 'Archive'])"
+        }
+      }
+    },
+    "scrivener": {
+      "type": "object",
+      "description": "Scrivener-specific configuration",
+      "properties": {
+        "draft_folder": {
+          "type": "string",
+          "description": "Path within .scriv to your draft folder (e.g., 'Manuscript' or 'Draft')"
+        },
+        "research_folder": {
+          "type": "string",
+          "description": "Path within .scriv to your research folder (optional)"
+        }
+      }
+    },
+    "chapters": {
+      "type": "object",
+      "description": "Book structure definition",
+      "properties": {
+        "structure": {
+          "type": "array",
+          "description": "Array of parts/sections with their chapter numbers",
+          "items": {
+            "type": "object",
+            "properties": {
+              "part": {
+                "type": "string",
+                "description": "Part name (e.g., 'Part I', 'Introduction')"
+              },
+              "chapters": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "Chapter numbers in this part"
+              }
+            },
+            "required": ["part", "chapters"]
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "project": {
+        "name": "My Book Title",
+        "author": "Jane Doe"
+      },
+      "zotero": {
+        "root_collection": "My Book",
+        "chapter_pattern": "^Chapter (\\d+)",
+        "exclude_collections": ["Archive", "_temp"]
+      },
+      "scrivener": {
+        "draft_folder": "Manuscript",
+        "research_folder": "Research"
+      },
+      "chapters": {
+        "structure": [
+          {
+            "part": "Part I",
+            "chapters": [1, 2, 3]
+          },
+          {
+            "part": "Part II",
+            "chapters": [4, 5, 6]
+          }
+        ]
+      }
+    }
+  ]
+}
