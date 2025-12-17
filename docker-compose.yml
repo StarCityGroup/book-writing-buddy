@@ -8,20 +8,19 @@ services:
       - ./data/qdrant_storage:/qdrant/storage
     restart: unless-stopped
 
-  book-research-mcp:
+  indexer:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: book-research-mcp
+    container_name: book-research-indexer
     depends_on:
       - qdrant
-
     volumes:
       # User's data directories (read-only)
       - ${ZOTERO_DATA_PATH}:/mnt/zotero:ro
       - ${SCRIVENER_PROJECT_PATH}:/mnt/scrivener:ro
 
-      # Persistent storage (read-write)
+      # Persistent storage for logs
       - ./data/logs:/data/logs
 
       # Configuration files
@@ -29,15 +28,13 @@ services:
       - ./config.local.json:/app/config.local.json:ro
 
     environment:
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-mpnet-base-v2}
       - QDRANT_URL=http://qdrant:6333
-      - DEBUG=${DEBUG:-false}
       - ZOTERO_PATH=/mnt/zotero
       - SCRIVENER_PATH=/mnt/scrivener
+      - DEBUG=${DEBUG:-false}
 
     restart: unless-stopped
 
-    # Health check
     healthcheck:
       test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
       interval: 30s

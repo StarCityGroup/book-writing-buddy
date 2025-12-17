@@ -1,39 +1,30 @@
 FROM python:3.11-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    poppler-utils \
-    sqlite3 \
-    antiword \
-    unrtf \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
-# Copy requirements first (for better caching)
-COPY requirements.txt .
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    sqlite3 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy dependency files
+COPY pyproject.toml ./
+COPY uv.lock ./
 
-# Pre-download embedding model (cache in image layer)
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-mpnet-base-v2')"
+# Install uv and dependencies
+RUN pip install uv
+RUN uv sync
 
 # Copy application code
 COPY src/ ./src/
-COPY config/default.json ./config/
+COPY config/ ./config/
 
-# Create data directories
-RUN mkdir -p /data/vectordb /data/logs
+# Create entry point script
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app /data
+# Data directory for logs
+RUN mkdir -p /data/logs
 
-USER appuser
-
-# Set PYTHONPATH so imports work correctly
-ENV PYTHONPATH=/app
-
-# Run the MCP server as a module
-CMD ["python", "-m", "src.mcp_server"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

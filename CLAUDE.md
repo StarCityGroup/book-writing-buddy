@@ -15,9 +15,9 @@ Before drafting each chapter, this tool:
 ## Project Structure
 
 - `analyze_chapter.py` - Main interactive script with TUI pickers
-- `config.json` - Project configuration (paths, patterns)
+- `config/` - Project configuration files
 - `output/` - Generated markdown analyses
-- `.claude/mcp.json` - **MCP server configuration (project-specific for Claude Code)**
+- `.claude/skills/` - **Claude Code skills (project-specific)**
 - `CLAUDE.md` - This file (project context and instructions)
 
 ## Data Sources
@@ -128,11 +128,11 @@ Write to `output/chapter-{number}-analysis-{timestamp}.md` including:
 
 ## Important Notes
 
-### Before Running
+### Before Running Skills
 - Close Zotero application (database lock conflict)
-- Start Docker containers: `docker compose up -d`
-- MCP server configuration is in `.claude/mcp.json` (project-specific for Claude Code)
-- Verify Scrivener project path is accessible
+- Start Qdrant: `docker compose up -d`
+- Ensure data is indexed (run indexer scripts if needed)
+- Verify environment variable: `QDRANT_URL=http://localhost:6333`
 
 ### Code Style
 - Use Python 3.8+ features
@@ -171,28 +171,63 @@ Default sections (configurable in config.json):
 ## Dependencies
 
 ### Python Packages
-- Standard library only for basic script
-- Optional: `rich` for better TUI (install with `uv add rich`)
-- Optional: `pick` for menu selection (install with `uv add pick`)
+Core dependencies (install with `uv sync`):
+- `qdrant-client` - Vector database client
+- `sentence-transformers` - For embeddings
+- `structlog` - Structured logging
 
 ### External Services
-- Book Research MCP server (custom, runs in Docker)
 - Qdrant vector database (runs in Docker)
-- Claude Code with MCP support (configured via `.claude/mcp.json`)
+- Zotero desktop application (for database access)
+
+## Claude Code Skills
+
+This project uses Claude Code skills (not MCP servers) for research analysis. Skills are located in `.claude/skills/`:
+
+### Available Skills
+
+1. **search-research** - Semantic search through indexed materials
+   - Query Zotero and Scrivener content
+   - Filter by chapter or source type
+   - Returns relevant chunks with similarity scores
+
+2. **get-annotations** - Retrieve Zotero annotations
+   - Get all highlights, notes, and comments for a chapter
+   - Organized by source document
+   - Includes annotation types and colors
+
+3. **analyze-gaps** - Identify research gaps
+   - Analyze source density and coverage
+   - Compare chapters to find weak areas
+   - Get recommendations for additional research
+
+4. **find-similar** - Detect similar or duplicate content
+   - Check for redundancy across sources
+   - Verify draft text against sources (plagiarism check)
+   - Configurable similarity threshold
+
+5. **get-chapter-info** - Comprehensive chapter overview
+   - Zotero collection details and source counts
+   - Scrivener structure and word counts
+   - Research density assessment
+
+### Using Skills
+
+Skills are automatically available in Claude Code. Example usage:
+```
+"Search for early DEC firewall implementations in chapter 2"
+"Get all annotations for chapter 9"
+"Analyze research gaps across the manuscript"
+```
 
 ## Error Handling
 
 ### Common Issues
-1. **Zotero database locked**: Remind user to close Zotero
-2. **Scrivener path not found**: Verify path in config.json
-3. **Empty collections**: Warn user if selected collection has no items
-4. **MCP not configured**: Provide clear setup instructions
-
-### Graceful Degradation
-If MCP servers aren't available, script should:
-- Warn user about missing MCP configuration
-- Provide setup instructions
-- Exit gracefully with helpful error messages
+1. **Zotero database locked**: Close Zotero application before running skills
+2. **Qdrant not running**: Start with `docker compose up -d`
+3. **No indexed data**: Run indexer scripts to populate vector database
+4. **Module not found errors**: Run `uv sync` to install dependencies
+5. **Empty results**: Check that chapter number matches Zotero collection naming
 
 ## Development Guidelines
 
