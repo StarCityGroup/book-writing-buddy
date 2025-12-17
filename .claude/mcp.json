@@ -1,19 +1,16 @@
 {
   "mcpServers": {
-    "zotero": {
-      "command": "zotero-mcp",
-      "args": [],
-      "env": {
-        "ZOTERO_DATA_DIR": "/Users/anthonytownsend/Zotero"
-      }
-    },
-    "filesystem": {
-      "command": "npx",
+    "book-research": {
+      "command": "docker",
       "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "/Users/anthonytownsend/Dropbox/Apps/Scrivener",
-        "/Users/anthonytownsend/code/_dev/book-chapter-planner"
+        "exec",
+        "-i",
+        "-e",
+        "MCP_MODE=stdio",
+        "book-research-mcp",
+        "python",
+        "-m",
+        "src.mcp_server"
       ]
     }
   }
