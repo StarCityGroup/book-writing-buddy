@@ -17,7 +17,8 @@ Before drafting each chapter, this tool:
 - `analyze_chapter.py` - Main interactive script with TUI pickers
 - `config.json` - Project configuration (paths, patterns)
 - `output/` - Generated markdown analyses
-- `.claude/` - Project-specific Claude instructions
+- `.claude/mcp.json` - **MCP server configuration (project-specific for Claude Code)**
+- `CLAUDE.md` - This file (project context and instructions)
 
 ## Data Sources
 
@@ -129,7 +130,8 @@ Write to `output/chapter-{number}-analysis-{timestamp}.md` including:
 
 ### Before Running
 - Close Zotero application (database lock conflict)
-- Ensure MCP servers are configured in Claude Desktop
+- Start Docker containers: `docker compose up -d`
+- MCP server configuration is in `.claude/mcp.json` (project-specific for Claude Code)
 - Verify Scrivener project path is accessible
 
 ### Code Style
@@ -174,9 +176,9 @@ Default sections (configurable in config.json):
 - Optional: `pick` for menu selection (install with `uv add pick`)
 
 ### External Services
-- Zotero MCP server (npm package)
-- Filesystem MCP server (npm package)
-- Claude Desktop with MCP support
+- Book Research MCP server (custom, runs in Docker)
+- Qdrant vector database (runs in Docker)
+- Claude Code with MCP support (configured via `.claude/mcp.json`)
 
 ## Error Handling
 

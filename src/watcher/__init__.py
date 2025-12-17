@@ -2,4 +2,4 @@
 
 from .file_watcher import FileWatcherDaemon
 
-__all__ = ['FileWatcherDaemon']
+__all__ = ["FileWatcherDaemon"]

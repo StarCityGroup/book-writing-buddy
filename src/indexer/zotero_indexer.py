@@ -5,17 +5,18 @@ Reads Zotero SQLite database, extracts attachments and notes,
 and indexes them for semantic search.
 """
 
-import sqlite3
 import re
+import sqlite3
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 import structlog
-
-from pypdf import PdfReader
 from bs4 import BeautifulSoup
+from pypdf import PdfReader
 
-from .chunking import PDFChunker
+from ..skills.fact_extractor import FactExtractor
 from ..vectordb.client import VectorDBClient
+from .chunking import PDFChunker
 
 logger = structlog.get_logger()
 
@@ -24,10 +25,7 @@ class ZoteroIndexer:
     """Index Zotero library for semantic search"""
 
     def __init__(
-        self,
-        zotero_path: str,
-        vectordb: VectorDBClient,
-        config: Dict[str, Any]
+        self, zotero_path: str, vectordb: VectorDBClient, config: Dict[str, Any]
     ):
         """
         Initialize Zotero indexer.
@@ -45,16 +43,27 @@ class ZoteroIndexer:
 
         # Initialize chunker
         self.chunker = PDFChunker(
-            target_size=config['embedding']['chunk_size'],
-            min_size=config['chunking']['min_chunk_size'],
-            max_size=config['chunking']['max_chunk_size'],
-            overlap=config['embedding']['chunk_overlap']
+            target_size=config["embedding"]["chunk_size"],
+            min_size=config["chunking"]["min_chunk_size"],
+            max_size=config["chunking"]["max_chunk_size"],
+            overlap=config["embedding"]["chunk_overlap"],
         )
 
         # Get project-specific config
-        self.root_collection = config.get('project', {}).get('zotero', {}).get('root_collection')
-        self.chapter_pattern = config.get('project', {}).get('zotero', {}).get('chapter_pattern', r'^(\d+)\.')
-        self.exclude_collections = config.get('project', {}).get('zotero', {}).get('exclude_collections', [])
+        self.root_collection = (
+            config.get("project", {}).get("zotero", {}).get("root_collection")
+        )
+        self.chapter_pattern = (
+            config.get("project", {})
+            .get("zotero", {})
+            .get("chapter_pattern", r"^(\d+)\.")
+        )
+        self.exclude_collections = (
+            config.get("project", {}).get("zotero", {}).get("exclude_collections", [])
+        )
+
+        # Initialize fact extractor
+        self.fact_extractor = FactExtractor()
 
     def get_collections(self) -> List[Dict[str, Any]]:
         """Get all collections with chapter numbers"""
@@ -78,12 +87,14 @@ class ZoteroIndexer:
             # Extract chapter number if matches pattern
             chapter_num = self._extract_chapter_number(name)
 
-            collections.append({
-                'id': coll_id,
-                'name': name,
-                'parent_id': parent_id,
-                'chapter_number': chapter_num
-            })
+            collections.append(
+                {
+                    "id": coll_id,
+                    "name": name,
+                    "parent_id": parent_id,
+                    "chapter_number": chapter_num,
+                }
+            )
 
         conn.close()
         return collections
@@ -107,12 +118,14 @@ class ZoteroIndexer:
         items = []
 
         for item_id, key, title, attachment_path in cursor.fetchall():
-            items.append({
-                'id': item_id,
-                'key': key,
-                'title': title or 'Untitled',
-                'attachment_path': attachment_path
-            })
+            items.append(
+                {
+                    "id": item_id,
+                    "key": key,
+                    "title": title or "Untitled",
+                    "attachment_path": attachment_path,
+                }
+            )
 
         conn.close()
         return items
@@ -151,16 +164,13 @@ class ZoteroIndexer:
             Dict with stats (collections_indexed, chunks_indexed)
         """
         collections = self.get_collections()
-        stats = {
-            'collections_indexed': 0,
-            'chunks_indexed': 0
-        }
+        stats = {"collections_indexed": 0, "chunks_indexed": 0}
 
         for collection in collections:
-            if collection['chapter_number'] is not None:
-                chunks = self.index_collection(collection['id'])
-                stats['collections_indexed'] += 1
-                stats['chunks_indexed'] += chunks
+            if collection["chapter_number"] is not None:
+                chunks = self.index_collection(collection["id"])
+                stats["collections_indexed"] += 1
+                stats["chunks_indexed"] += chunks
 
         return stats
 
@@ -168,28 +178,30 @@ class ZoteroIndexer:
         """Index a single Zotero item"""
         # Get collection info for metadata
         collections = self.get_collections()
-        collection = next((c for c in collections if c['id'] == collection_id), None)
+        collection = next((c for c in collections if c["id"] == collection_id), None)
 
         metadata = {
-            'source_type': 'zotero',
-            'item_id': item['id'],
-            'item_key': item['key'],
-            'title': item['title'],
-            'collection_id': collection_id,
-            'collection_name': collection['name'] if collection else None,
-            'chapter_number': collection['chapter_number'] if collection else None
+            "source_type": "zotero",
+            "item_id": item["id"],
+            "item_key": item["key"],
+            "title": item["title"],
+            "collection_id": collection_id,
+            "collection_name": collection["name"] if collection else None,
+            "chapter_number": collection["chapter_number"] if collection else None,
         }
 
         # Extract text based on attachment type
-        if item['attachment_path']:
-            attachment_path = self._resolve_attachment_path(item['attachment_path'], item['key'])
+        if item["attachment_path"]:
+            attachment_path = self._resolve_attachment_path(
+                item["attachment_path"], item["key"]
+            )
 
             if attachment_path and attachment_path.exists():
-                if attachment_path.suffix.lower() == '.pdf':
+                if attachment_path.suffix.lower() == ".pdf":
                     return self._index_pdf(attachment_path, metadata)
-                elif attachment_path.suffix.lower() in ['.html', '.htm']:
+                elif attachment_path.suffix.lower() in [".html", ".htm"]:
                     return self._index_html(attachment_path, metadata)
-                elif attachment_path.suffix.lower() == '.txt':
+                elif attachment_path.suffix.lower() == ".txt":
                     return self._index_text(attachment_path, metadata)
 
         return 0
@@ -203,27 +215,24 @@ class ZoteroIndexer:
             for page_num, page in enumerate(reader.pages, start=1):
                 text = page.extract_text()
                 if text.strip():
-                    pages.append({
-                        'text': text,
-                        'page_num': page_num
-                    })
+                    pages.append({"text": text, "page_num": page_num})
 
             # Add file path to metadata
-            metadata['file_path'] = str(pdf_path)
-            metadata['file_type'] = 'pdf'
-            metadata['total_pages'] = len(reader.pages)
+            metadata["file_path"] = str(pdf_path)
+            metadata["file_type"] = "pdf"
+            metadata["total_pages"] = len(reader.pages)
 
             # Chunk with page awareness
             chunks = self.chunker.chunk_with_pages(pages, metadata)
 
-            # Convert to format expected by vectordb
-            chunk_dicts = [
-                {
-                    'text': chunk.text,
-                    'metadata': chunk.metadata
-                }
-                for chunk in chunks
-            ]
+            # Convert to format expected by vectordb and enrich with facts
+            chunk_dicts = []
+            for chunk in chunks:
+                # Extract facts and enrich metadata
+                enriched_metadata = self.fact_extractor.extract_and_tag_chunk(
+                    chunk.text, chunk.metadata
+                )
+                chunk_dicts.append({"text": chunk.text, "metadata": enriched_metadata})
 
             # Index
             return self.vectordb.index_chunks(chunk_dicts)
@@ -235,32 +244,32 @@ class ZoteroIndexer:
     def _index_html(self, html_path: Path, metadata: Dict[str, Any]) -> int:
         """Extract text from HTML and index"""
         try:
-            with open(html_path, 'r', encoding='utf-8') as f:
-                soup = BeautifulSoup(f.read(), 'html.parser')
+            with open(html_path, "r", encoding="utf-8") as f:
+                soup = BeautifulSoup(f.read(), "html.parser")
 
             # Remove script and style elements
-            for script in soup(['script', 'style']):
+            for script in soup(["script", "style"]):
                 script.decompose()
 
             text = soup.get_text()
 
             # Clean up whitespace
             lines = (line.strip() for line in text.splitlines())
-            text = '\n'.join(line for line in lines if line)
+            text = "\n".join(line for line in lines if line)
 
-            metadata['file_path'] = str(html_path)
-            metadata['file_type'] = 'html'
+            metadata["file_path"] = str(html_path)
+            metadata["file_type"] = "html"
 
             # Chunk
             chunks = self.chunker.chunk(text, metadata)
 
-            chunk_dicts = [
-                {
-                    'text': chunk.text,
-                    'metadata': chunk.metadata
-                }
-                for chunk in chunks
-            ]
+            # Enrich with facts
+            chunk_dicts = []
+            for chunk in chunks:
+                enriched_metadata = self.fact_extractor.extract_and_tag_chunk(
+                    chunk.text, chunk.metadata
+                )
+                chunk_dicts.append({"text": chunk.text, "metadata": enriched_metadata})
 
             return self.vectordb.index_chunks(chunk_dicts)
 
@@ -271,21 +280,21 @@ class ZoteroIndexer:
     def _index_text(self, text_path: Path, metadata: Dict[str, Any]) -> int:
         """Index plain text file"""
         try:
-            with open(text_path, 'r', encoding='utf-8') as f:
+            with open(text_path, "r", encoding="utf-8") as f:
                 text = f.read()
 
-            metadata['file_path'] = str(text_path)
-            metadata['file_type'] = 'text'
+            metadata["file_path"] = str(text_path)
+            metadata["file_type"] = "text"
 
             chunks = self.chunker.chunk(text, metadata)
 
-            chunk_dicts = [
-                {
-                    'text': chunk.text,
-                    'metadata': chunk.metadata
-                }
-                for chunk in chunks
-            ]
+            # Enrich with facts
+            chunk_dicts = []
+            for chunk in chunks:
+                enriched_metadata = self.fact_extractor.extract_and_tag_chunk(
+                    chunk.text, chunk.metadata
+                )
+                chunk_dicts.append({"text": chunk.text, "metadata": enriched_metadata})
 
             return self.vectordb.index_chunks(chunk_dicts)
 
@@ -299,8 +308,8 @@ class ZoteroIndexer:
             return None
 
         # Zotero uses 'storage:' prefix for linked files
-        if path.startswith('storage:'):
-            filename = path.replace('storage:', '')
+        if path.startswith("storage:"):
+            filename = path.replace("storage:", "")
             return self.storage_path / item_key / filename
 
         # Absolute path

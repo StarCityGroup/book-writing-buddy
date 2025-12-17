@@ -6,13 +6,14 @@ and meaning, optimized for semantic search over book-length content.
 """
 
 import re
-from typing import List, Dict, Any
 from dataclasses import dataclass
+from typing import Any, Dict, List
 
 
 @dataclass
 class Chunk:
     """A text chunk with metadata"""
+
     text: str
     start_pos: int
     end_pos: int
@@ -30,7 +31,7 @@ class SemanticChunker:
         target_size: int = 500,
         min_size: int = 200,
         max_size: int = 800,
-        overlap: int = 100
+        overlap: int = 100,
     ):
         """
         Args:
@@ -74,11 +75,9 @@ class SemanticChunker:
 
             # If adding this paragraph would exceed max_size, create a chunk
             if len(current_chunk) + len(para) > self.max_size and current_chunk:
-                chunks.append(self._create_chunk(
-                    current_chunk,
-                    current_start,
-                    metadata
-                ))
+                chunks.append(
+                    self._create_chunk(current_chunk, current_start, metadata)
+                )
 
                 # Start new chunk with overlap
                 overlap_text = self._get_overlap(current_chunk)
@@ -89,11 +88,7 @@ class SemanticChunker:
 
         # Add final chunk
         if current_chunk.strip():
-            chunks.append(self._create_chunk(
-                current_chunk,
-                current_start,
-                metadata
-            ))
+            chunks.append(self._create_chunk(current_chunk, current_start, metadata))
 
         return chunks
 
@@ -107,12 +102,12 @@ class SemanticChunker:
         - List items
         """
         # Replace various paragraph separators with consistent marker
-        text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = re.sub(r"\n\s*\n", "\n\n", text)
 
         # Split on double newlines
-        paragraphs = text.split('\n\n')
+        paragraphs = text.split("\n\n")
 
-        return [p + '\n\n' for p in paragraphs if p.strip()]
+        return [p + "\n\n" for p in paragraphs if p.strip()]
 
     def _get_overlap(self, text: str) -> str:
         """Get the last N characters as overlap for next chunk"""
@@ -120,25 +115,20 @@ class SemanticChunker:
             return text
 
         # Try to break at sentence boundary
-        overlap_text = text[-self.overlap:]
+        overlap_text = text[-self.overlap :]
 
         # Find last sentence end in overlap
         sentence_end = max(
-            overlap_text.rfind('. '),
-            overlap_text.rfind('! '),
-            overlap_text.rfind('? ')
+            overlap_text.rfind(". "), overlap_text.rfind("! "), overlap_text.rfind("? ")
         )
 
         if sentence_end > 0:
-            return overlap_text[sentence_end + 2:]
+            return overlap_text[sentence_end + 2 :]
 
         return overlap_text
 
     def _create_chunk(
-        self,
-        text: str,
-        start_pos: int,
-        metadata: Dict[str, Any]
+        self, text: str, start_pos: int, metadata: Dict[str, Any]
     ) -> Chunk:
         """Create a Chunk object with metadata"""
         text = text.strip()
@@ -146,7 +136,7 @@ class SemanticChunker:
             text=text,
             start_pos=start_pos,
             end_pos=start_pos + len(text),
-            metadata=metadata.copy()
+            metadata=metadata.copy(),
         )
 
 
@@ -157,9 +147,7 @@ class PDFChunker(SemanticChunker):
     """
 
     def chunk_with_pages(
-        self,
-        pages: List[Dict[str, Any]],
-        global_metadata: Dict[str, Any] = None
+        self, pages: List[Dict[str, Any]], global_metadata: Dict[str, Any] = None
     ) -> List[Chunk]:
         """
         Chunk PDF with page-aware metadata.
@@ -175,12 +163,12 @@ class PDFChunker(SemanticChunker):
         all_chunks = []
 
         for page_data in pages:
-            page_text = page_data['text']
-            page_num = page_data['page_num']
+            page_text = page_data["text"]
+            page_num = page_data["page_num"]
 
             # Add page number to metadata
             page_metadata = global_metadata.copy()
-            page_metadata['page_number'] = page_num
+            page_metadata["page_number"] = page_num
 
             # Chunk this page
             page_chunks = self.chunk(page_text, page_metadata)
@@ -200,7 +188,7 @@ class ScrivenerChunker(SemanticChunker):
         content: str,
         doc_type: str,  # 'draft', 'note', 'synopsis'
         path: str,
-        metadata: Dict[str, Any] = None
+        metadata: Dict[str, Any] = None,
     ) -> List[Chunk]:
         """
         Chunk Scrivener document with type-specific handling.
@@ -215,20 +203,17 @@ class ScrivenerChunker(SemanticChunker):
             List of chunks with Scrivener-specific metadata
         """
         metadata = metadata or {}
-        metadata.update({
-            'source_type': 'scrivener',
-            'doc_type': doc_type,
-            'scrivener_path': path
-        })
+        metadata.update(
+            {"source_type": "scrivener", "doc_type": doc_type, "scrivener_path": path}
+        )
 
         # Synopses are usually short, don't chunk
-        if doc_type == 'synopsis' and len(content) < self.max_size:
-            return [Chunk(
-                text=content,
-                start_pos=0,
-                end_pos=len(content),
-                metadata=metadata
-            )]
+        if doc_type == "synopsis" and len(content) < self.max_size:
+            return [
+                Chunk(
+                    text=content, start_pos=0, end_pos=len(content), metadata=metadata
+                )
+            ]
 
         return self.chunk(content, metadata)
 
@@ -245,9 +230,9 @@ def create_chunker(strategy: str = "semantic", **kwargs) -> SemanticChunker:
         Chunker instance
     """
     chunkers = {
-        'semantic': SemanticChunker,
-        'pdf': PDFChunker,
-        'scrivener': ScrivenerChunker
+        "semantic": SemanticChunker,
+        "pdf": PDFChunker,
+        "scrivener": ScrivenerChunker,
     }
 
     chunker_class = chunkers.get(strategy, SemanticChunker)

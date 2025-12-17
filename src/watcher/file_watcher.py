@@ -7,13 +7,13 @@ triggers re-indexing automatically.
 
 import time
 from pathlib import Path
-from typing import Dict, Any, Set
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileSystemEvent
-import structlog
+from typing import Any, Dict, Set
 
-from ..indexer import ZoteroIndexer, ScrivenerIndexer
-from ..vectordb.client import VectorDBClient
+import structlog
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
+from watchdog.observers import Observer
+
+from ..indexer import ScrivenerIndexer, ZoteroIndexer
 
 logger = structlog.get_logger()
 
@@ -25,12 +25,7 @@ class DebounceHandler(FileSystemEventHandler):
     Waits for file changes to settle before triggering indexing.
     """
 
-    def __init__(
-        self,
-        callback,
-        debounce_seconds: int = 5,
-        patterns: Set[str] = None
-    ):
+    def __init__(self, callback, debounce_seconds: int = 5, patterns: Set[str] = None):
         """
         Initialize debounce handler.
 
@@ -42,7 +37,7 @@ class DebounceHandler(FileSystemEventHandler):
         super().__init__()
         self.callback = callback
         self.debounce_seconds = debounce_seconds
-        self.patterns = patterns or {'*'}
+        self.patterns = patterns or {"*"}
         self.pending_changes = {}
         self.last_change_time = {}
 
@@ -85,7 +80,7 @@ class DebounceHandler(FileSystemEventHandler):
 
     def _matches_pattern(self, path: Path) -> bool:
         """Check if path matches any watch pattern"""
-        if '*' in self.patterns:
+        if "*" in self.patterns:
             return True
 
         for pattern in self.patterns:
@@ -107,7 +102,7 @@ class FileWatcherDaemon:
         self,
         zotero_indexer: ZoteroIndexer,
         scrivener_indexer: ScrivenerIndexer,
-        config: Dict[str, Any]
+        config: Dict[str, Any],
     ):
         """
         Initialize file watcher daemon.
@@ -126,20 +121,14 @@ class FileWatcherDaemon:
         # Setup handlers
         self.zotero_handler = DebounceHandler(
             callback=self._handle_zotero_changes,
-            debounce_seconds=config['indexing']['debounce_seconds'],
-            patterns={
-                '*.pdf',
-                '*.html',
-                '*.htm',
-                '*.txt',
-                'zotero.sqlite'
-            }
+            debounce_seconds=config["indexing"]["debounce_seconds"],
+            patterns={"*.pdf", "*.html", "*.htm", "*.txt", "zotero.sqlite"},
         )
 
         self.scrivener_handler = DebounceHandler(
             callback=self._handle_scrivener_changes,
-            debounce_seconds=config['indexing']['debounce_seconds'],
-            patterns={'*.rtf', '*.txt'}
+            debounce_seconds=config["indexing"]["debounce_seconds"],
+            patterns={"*.rtf", "*.txt"},
         )
 
     def start(self):
@@ -150,11 +139,7 @@ class FileWatcherDaemon:
         zotero_storage = self.zotero_indexer.storage_path
         if zotero_storage.exists():
             observer = Observer()
-            observer.schedule(
-                self.zotero_handler,
-                str(zotero_storage),
-                recursive=True
-            )
+            observer.schedule(self.zotero_handler, str(zotero_storage), recursive=True)
             observer.start()
             self.observers.append(observer)
             logger.info(f"Watching Zotero storage: {zotero_storage}")
@@ -166,9 +151,7 @@ class FileWatcherDaemon:
         if scrivener_data.exists():
             observer = Observer()
             observer.schedule(
-                self.scrivener_handler,
-                str(scrivener_data),
-                recursive=True
+                self.scrivener_handler, str(scrivener_data), recursive=True
             )
             observer.start()
             self.observers.append(observer)

@@ -5,10 +5,10 @@ Interactive setup wizard for Book Research MCP.
 Guides users through configuration and validates paths.
 """
 
-import os
-import sys
 import json
+import os
 import sqlite3
+import sys
 from pathlib import Path
 
 
@@ -22,7 +22,7 @@ def main():
     if Path(".env").exists():
         print("⚠️  .env file already exists.")
         overwrite = input("Overwrite? (y/N): ").strip().lower()
-        if overwrite != 'y':
+        if overwrite != "y":
             print("Setup cancelled.")
             return
         print()
@@ -70,10 +70,10 @@ def main():
         print("   Please check the path and try again.")
         return
 
-    if not scrivener_path.endswith('.scriv'):
+    if not scrivener_path.endswith(".scriv"):
         print("⚠️  Warning: Path doesn't end in .scriv")
         confirm = input("Continue anyway? (y/N): ").strip().lower()
-        if confirm != 'y':
+        if confirm != "y":
             return
 
     # Check for Files/Data directory
@@ -82,7 +82,7 @@ def main():
         print(f"⚠️  Warning: Files/Data directory not found in {scrivener_path}")
         print("   This may not be a valid Scrivener project.")
         confirm = input("Continue anyway? (y/N): ").strip().lower()
-        if confirm != 'y':
+        if confirm != "y":
             return
 
     print("✅ Scrivener project found")
@@ -102,7 +102,7 @@ def main():
     models = {
         "1": "all-mpnet-base-v2",
         "2": "all-MiniLM-L6-v2",
-        "3": "paraphrase-multilingual-MiniLM-L12-v2"
+        "3": "paraphrase-multilingual-MiniLM-L12-v2",
     }
 
     embedding_model = models.get(model_choice, "all-mpnet-base-v2")
@@ -139,9 +139,13 @@ DEBUG=false
 
     # Offer to create config.local.json
     print()
-    create_local = input("Create project-specific config (config.local.json)? (Y/n): ").strip().lower()
+    create_local = (
+        input("Create project-specific config (config.local.json)? (Y/n): ")
+        .strip()
+        .lower()
+    )
 
-    if create_local != 'n':
+    if create_local != "n":
         project_name = input("  Project/book name: ").strip() or "My Book"
         author_name = input("  Your name: ").strip() or "Author"
 
@@ -163,27 +167,26 @@ DEBUG=false
             collections = []
 
         print()
-        root_collection = input("  Root collection name (or press Enter to skip): ").strip()
+        root_collection = input(
+            "  Root collection name (or press Enter to skip): "
+        ).strip()
 
-        local_config = {
-            "project": {
-                "name": project_name,
-                "author": author_name
-            }
-        }
+        local_config = {"project": {"name": project_name, "author": author_name}}
 
         if root_collection:
-            chapter_pattern = input("  Chapter number pattern [^(\\d+)\\.]: ").strip() or "^(\\d+)\\."
+            chapter_pattern = (
+                input("  Chapter number pattern [^(\\d+)\\.]: ").strip() or "^(\\d+)\\."
+            )
 
             local_config["zotero"] = {
                 "root_collection": root_collection,
                 "chapter_pattern": chapter_pattern,
-                "exclude_collections": ["_incoming", "__incoming", "Archive"]
+                "exclude_collections": ["_incoming", "__incoming", "Archive"],
             }
 
         local_config["scrivener"] = {
             "draft_folder": "Manuscript",
-            "research_folder": "Research"
+            "research_folder": "Research",
         }
 
         # Ask about chapter structure
@@ -191,25 +194,26 @@ DEBUG=false
         print("  Define your book structure (optional):")
         define_structure = input("  Define parts and chapters? (y/N): ").strip().lower()
 
-        if define_structure == 'y':
+        if define_structure == "y":
             structure = []
             part_num = 1
 
             while True:
-                part_name = input(f"    Part {part_num} name (or Enter to finish): ").strip()
+                part_name = input(
+                    f"    Part {part_num} name (or Enter to finish): "
+                ).strip()
                 if not part_name:
                     break
 
-                chapters_input = input(f"    Chapter numbers (e.g., 1,2,3 or 1-5): ").strip()
+                chapters_input = input(
+                    "    Chapter numbers (e.g., 1,2,3 or 1-5): "
+                ).strip()
 
                 # Parse chapter range
                 chapters = parse_chapter_range(chapters_input)
 
                 if chapters:
-                    structure.append({
-                        "part": part_name,
-                        "chapters": chapters
-                    })
+                    structure.append({"part": part_name, "chapters": chapters})
                     part_num += 1
 
             if structure:
@@ -276,14 +280,14 @@ def parse_chapter_range(input_str: str) -> list:
         chapters = []
 
         # Split by comma
-        parts = input_str.split(',')
+        parts = input_str.split(",")
 
         for part in parts:
             part = part.strip()
 
             # Check for range (1-5)
-            if '-' in part:
-                start, end = part.split('-')
+            if "-" in part:
+                start, end = part.split("-")
                 start = int(start.strip())
                 end = int(end.strip())
                 chapters.extend(range(start, end + 1))
