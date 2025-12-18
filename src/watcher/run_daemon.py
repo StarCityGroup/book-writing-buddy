@@ -53,13 +53,13 @@ def main():
 
     # Initialize indexers
     zotero_indexer = ZoteroIndexer(
-        zotero_data_path=zotero_path,
+        zotero_path=zotero_path,
         vectordb=vectordb,
         config=config
     )
 
     scrivener_indexer = ScrivenerIndexer(
-        scrivener_project_path=scrivener_path,
+        scrivener_path=scrivener_path,
         vectordb=vectordb,
         config=config
     )
