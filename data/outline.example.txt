@@ -1,0 +1,52 @@
+# Book Outline & Context Template
+
+**PURPOSE:** This file provides narrative context about your book for the AI agent.
+The chapter structure itself is automatically read from your Scrivener project.
+Use this file to describe themes, key concepts, and the narrative arc.
+
+**Title:** YOUR BOOK TITLE
+**Theme:** Brief description of your book's central argument or theme
+
+## Overview
+
+Describe what your book is about, its main argument, and who it's for.
+The AI agent will use this to understand the context when helping with research.
+
+## Key Themes & Arguments
+
+### Theme 1: Name
+Description of this theme and where it appears in the book
+
+### Theme 2: Name
+Description of this theme and where it appears in the book
+
+## Structure & Arc
+
+Describe how the book is organized and how the argument progresses.
+What does each major section accomplish?
+
+### Part I: Introduction/Setup
+What role does this section play in the overall argument?
+
+### Part II: Main Body
+What does the main section explore or demonstrate?
+
+### Part III: Conclusion
+How does the book wrap up the argument?
+
+## Key Concepts & Terminology
+
+List important concepts, technical terms, or frameworks that recur throughout:
+- **Concept 1:** Definition and significance
+- **Concept 2:** Definition and significance
+- **Concept 3:** Definition and significance
+
+These help the AI make connections across chapters and understand your specialized vocabulary.
+
+## Notes for the AI Agent
+
+Any other context that would help the AI assistant understand your book:
+- Writing style or tone
+- Target audience
+- Related works or intellectual context
+- Special considerations

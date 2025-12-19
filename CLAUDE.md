@@ -22,35 +22,23 @@ Before drafting each chapter, this tool:
 
 ## Data Sources
 
+Project-specific details are configured in `data/project.json` (copy from `data/project.example.json` and customize).
+
 ### Zotero Collections
-- **Structure**: Nested hierarchy under root collection "FIREWALL"
-  ```
-  FIREWALL/
-  ├── General Reference/        (important context for all chapters)
-  ├── __incoming/               (unsorted documents)
-  ├── Part I. Adaptation Shock/
-  │   ├── 1. the mangrove and the space mirror
-  │   ├── 2. adaptation shock
-  │   ├── 3. gaps and traps
-  │   └── 4. adaptive intelligence
-  ├── Part II. Behind the Firewall/
-  │   ├── 5. early warning
-  │   ├── 9. underground cables
-  │   └── ... (chapters 5-23)
-  └── Part III. Transformation/
-      ├── 24. intelligence for adaptation (ai agenda)
-      └── ... (chapters 24-27)
-  ```
-- **Pattern**: Chapters numbered 1-27, with lowercase titles
-- **Location**: Local Zotero database at `/Users/anthonytownsend/Zotero`
-- **Access**: Via Zotero MCP server (must close Zotero before running)
+- **Structure**: Nested hierarchy under a root collection
+  - Root collection name configured in `data/project.json`
+  - Special collections: General Reference (cross-chapter context), __incoming (unsorted)
+  - Chapter collections organized by parts
+- **Pattern**: Chapters typically numbered with format `{number}. {title}`
+- **Location**: Local Zotero database (path set in `.env`)
+- **Access**: Via Docker indexer (must close Zotero before running)
 - **Content**: Research sources, clippings, annotations, notes
-- **General Reference**: Always included in analysis for cross-chapter context
+- **General Reference**: Cross-chapter context materials
 
 ### Scrivener Project
-- **Location**: `/Users/anthonytownsend/Dropbox/Apps/Scrivener/FIREWALL.scriv`
-- **Structure**: Nested folder structure (not consistently named)
-- **Access**: Via Filesystem MCP server
+- **Location**: Configured in `.env` as `SCRIVENER_PROJECT_PATH`
+- **Structure**: Nested folder structure (naming varies by project)
+- **Access**: Via Docker indexer
 - **Content**: Chapter drafts, research notes, outlines
 
 ### Manuscript Context
@@ -77,6 +65,20 @@ Generated markdown includes:
 - **Narrative Thread**: Suggested approach and structure
 - **Bag of Examples**: Concrete cases and illustrations
 
+## Keeping Structure in Sync
+
+**Critical Design Principle:** The outline, Zotero collections, and Scrivener chapters can drift out of sync as the author revises their book structure.
+
+- **Scrivener is the definitive source of truth** for chapter structure
+- The agent should detect and gracefully handle mismatches
+- When ambiguity exists, ask clarifying questions
+- Proactively suggest checking sync status when you detect issues
+- Don't fail - work with available data
+
+**Sync Check Skill:** Use the `check-sync` skill to identify mismatches and provide recommendations.
+
+See `docs/SYNCING.md` for detailed workflow guidance.
+
 ## Workflow Instructions
 
 When the user asks to analyze a chapter:
@@ -92,7 +94,7 @@ When the user asks to analyze a chapter:
 5. **General Reference collection**: Only use as fallback if chapter has insufficient materials (very large documents)
 
 ### Step 2: Analyze Scrivener Manuscript
-1. Navigate to Scrivener project: `/Users/anthonytownsend/Dropbox/Apps/Scrivener/FIREWALL.scriv`
+1. Navigate to Scrivener project (path from `.env`)
 2. Explore the Files/Data/ structure to find chapter folders
 3. **Read the chapter drafts and notes**:
    - Current draft text
@@ -155,8 +157,8 @@ Write to `output/chapter-{number}-analysis-{timestamp}.md` including:
 ## Configuration
 
 ### Zotero Collection Pattern
-Collections follow: `{number}. {title}` format
-Example: "1. The Early Days of Firewalls", "2. DEC and the Packet Filter"
+Collections follow the pattern defined in `data/project.json` (typically `{number}. {title}`)
+Example: "1. Chapter Title", "2. Another Chapter Title"
 
 ### Scrivener Structure
 Variable nested structure - use folder picker instead of pattern matching.
@@ -249,12 +251,23 @@ Skills are automatically available in Claude Code. Example usage:
 - Include source attribution
 - Keep format consistent across analyses
 
-## User's Book Context
+## Project-Specific Context
 
-**Title**: FIREWALL (working title)
-**Topic**: History of firewall technology and network security
-**Research**: Managed in Zotero with chapter-organized collections
-**Drafting**: In Scrivener with nested chapter folders
+The agent gets book context from two sources:
+
+1. **Scrivener Project Structure** (automatic, definitive)
+   - Chapter hierarchy, numbers, and titles parsed from `.scrivx` file
+   - Scrivener is the source of truth for chapter structure
+   - No manual maintenance needed
+
+2. **`data/outline.txt`** (manual, narrative context)
+   - Themes, key concepts, argument structure
+   - Narrative descriptions of what each section accomplishes
+   - Important terminology and frameworks
+   - Copy from `data/outline.example.txt` to get started
+   - Update when themes/concepts evolve (not when chapters move)
+
+Both are combined into the system prompt to give the agent full context.
 
 ## Future Enhancements
 

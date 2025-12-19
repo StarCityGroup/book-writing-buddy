@@ -1,6 +1,7 @@
 """LangGraph node implementations for the book research agent."""
 
 import os
+from pathlib import Path
 from typing import Dict, List
 
 from langchain_openai import ChatOpenAI
@@ -9,68 +10,44 @@ from openai import APIConnectionError
 from .rag import BookRAG
 from .state import AgentState
 
-# Book structure context
-BOOK_OUTLINE = """# FIREWALL - Book Structure
 
-**Title:** FIREWALL
-**Theme:** Technology and AI as tools to buy crucial time to prepare for climate change
+def load_book_context() -> str:
+    """Load book context from Scrivener structure and outline.txt.
 
-## How the Book is Organized
-The book breaks down the story of climate adaptation into three parts across 27 chapters (2,000-2,500 words each).
+    Returns:
+        Combined context with Scrivener structure and narrative outline.
+    """
+    parts = []
 
-### Part I: Adaptation Shock (Chapters 1-4)
-Lays out the challenge of climate adaptation and makes the case for why AI is essential.
-- Chapter 1: The Mangrove and the Space Mirror - Contrasting extremes of adaptation
-- Chapter 2: Adaptation Shock - Overview of growing challenges and sudden onset
-- Chapter 3: Gaps and Traps - The work ahead, costs, and potential pitfalls
-- Chapter 4: Adaptive Intelligence - How AI boom makes adaptation easier
+    # 1. Get Scrivener chapter structure (definitive)
+    scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
+    if scrivener_path and Path(scrivener_path).exists():
+        try:
+            from .scrivener_parser import ScrivenerParser
 
-### Part II: Behind the Firewall (Chapters 5-23)
-Tour of localized hazards and technology-powered solutions around the world.
+            parser = ScrivenerParser(scrivener_path)
+            structure = parser.format_structure_as_text()
+            parts.append(structure)
+        except Exception as e:
+            parts.append(f"# Scrivener Structure\n\nCould not parse: {e}\n")
+    else:
+        parts.append("# Scrivener Structure\n\nPath not configured in .env\n")
 
-**Early Warning & Risk Assessment (5-7)**
-- Chapter 5: Early Warning - Wildfire alerts and digital twins
-- Chapter 6: Predicting Floods - AI-powered flood mapping and prediction
-- Chapter 7: Fortified Homes - Climate risk in real estate and smart homes
+    # 2. Get narrative outline (provides context, themes, descriptions)
+    outline_path = Path(__file__).parent.parent / "data" / "outline.txt"
+    if outline_path.exists():
+        parts.append("# Book Outline & Context\n\n" + outline_path.read_text())
+    else:
+        parts.append(
+            "# Book Outline\n\nNo outline file found. "
+            "Create `data/outline.txt` with narrative context about your book."
+        )
 
-**Infrastructure & Basic Systems (8-12)**
-- Chapter 8: Weatherproof Buildings - Drone inspections in Singapore
-- Chapter 9: Underground Cables - Protecting power and telecom networks
-- Chapter 10: Decentralized Electricity - Grid independence with AI coordination
-- Chapter 11: Active and Automated Mobility - Climate-proof transit and pedtech
-- Chapter 12: Resilient Supply Chains - Last-mile delivery via waterways
+    return "\n\n---\n\n".join(parts)
 
-**Urban Heat Solutions (13-15)**
-- Chapter 13: Hyperlocal Heatmaps - Measuring urban heat islands with precision
-- Chapter 14: Thermal Grids - Heat pumps and thermal infrastructure
-- Chapter 15: Passive and Connected Cooling - Indoor climate risks and wearables
 
-**Nature-Based Solutions (16-21)**
-- Chapter 16: Quantified Canopies - Digital twins of urban forests
-- Chapter 17: Smart Sponge Cities - Blue roofs and bioswales
-- Chapter 18: Data Against Drought - Desalination and water conservation
-- Chapter 19: Upgrading the Coast - Managed retreat and seasteading
-- Chapter 20: Multi-Species Cities - Computational biology and rewilding
-- Chapter 21: Capturing Nature's Worth - Earth observation and natural assets
-
-**Extreme Interventions (22-23)**
-- Chapter 22: Managing the Sun - Solar radiation management
-- Chapter 23: Urban Domes and Underground Cities - Desperate adaptations
-
-### Part III: Transformation (Chapters 24-27)
-Assessing choices about technology and how decisions will change us.
-- Chapter 24: Intelligence for Adaptation - Future of AI shaped by adaptation needs
-- Chapter 25: Financing the Firewall - Private investment in adaptation & resilience
-- Chapter 26: Climate-Proof Cities - Using AI to rebuild hastily-constructed cities
-- Chapter 27: How to Start - Practical steps for readers to prepare
-
-**Key Concepts:**
-- Climate resilience vs. transformation
-- Adaptation gap (costs vs. spending)
-- Adaptation traps (what could go wrong)
-- Co-benefits of nature-based solutions
-- Embodied AI for physical world interaction
-"""
+# Load book context from both sources
+BOOK_OUTLINE = load_book_context()
 
 
 class BookResearchNodes:
@@ -123,9 +100,16 @@ Your role in the PLANNING phase is to:
 3. Briefly acknowledge what you'll look up (1-2 sentences)
 
 Available data:
-- Zotero collections organized by chapter (1-27)
+- Zotero collections organized by chapter
 - Scrivener manuscript drafts
 - All content indexed in vector database for semantic search
+
+**IMPORTANT - Handling Sync Issues:**
+The outline.txt, Zotero collections, and Scrivener chapters may be out of sync as the author revises their structure.
+- **Scrivener is the definitive source of truth** for chapter structure
+- If you encounter ambiguity or missing data, ask clarifying questions
+- If chapter numbers don't match, note this and suggest running the check-sync skill
+- Be graceful when information is incomplete - do your best with available data
 
 Keep your response brief - just acknowledge the request. The system will automatically proceed to gather the information."""
 
@@ -320,7 +304,7 @@ Type `/exit` to quit and fix the configuration."""
         full_context = "\n\n".join(context_parts)
 
         # System prompt for analysis
-        system_prompt = f"""You are an AI research assistant analyzing book research materials for FIREWALL.
+        system_prompt = f"""You are an AI research assistant analyzing book research materials.
 
 {BOOK_OUTLINE}
 
@@ -331,7 +315,14 @@ Your role is to:
 4. Make connections between different sources and chapters
 5. Suggest where findings might fit in the book's narrative
 6. Highlight important insights or patterns
-7. Note connections to key concepts (adaptation gap, traps, resilience vs transformation, etc.)
+7. Note connections to key concepts mentioned in the outline
+
+**Handling Sync Issues:**
+If you notice gaps or inconsistencies (e.g., outline mentions chapters not in Zotero, or vice versa):
+- Note the discrepancy clearly
+- Work with available data - don't fail because of missing sources
+- Suggest the author may need to sync their outline/Zotero/Scrivener structure
+- Recommend using the check-sync skill to see detailed mismatches
 
 Be thorough but concise. Focus on actionable insights that help advance the book's argument."""
 

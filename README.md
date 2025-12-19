@@ -12,7 +12,7 @@ Research assistant for book writers using Zotero and Scrivener. Indexes your res
 
 ## Use Cases
 
-- 📚 **Chapter Preparation**: Get all research for a specific chapter
+- 📚 **Chapter Planning**: Produce a plan for writing a chapter based on chapter outline, research, and current manuscript draft, notes, and ideas.
 - 🔍 **Semantic Search**: Find relevant passages across all materials
 - 📊 **Gap Analysis**: Identify chapters that need more sources
 - 📝 **Annotation Review**: Access all your Zotero highlights and notes
@@ -39,6 +39,10 @@ uv sync
 cp .env.example .env
 # Edit .env with your Zotero and Scrivener paths
 
+# Set up book context (optional but recommended)
+cp data/outline.example.txt data/outline.txt
+# Edit data/outline.txt with your book's themes and key concepts
+
 # Start services (Qdrant + Indexer/Watcher)
 docker compose up --build -d
 
@@ -58,6 +62,9 @@ Once indexed, Claude Code can use these skills:
 3. **analyze-gaps** - Identify research gaps in coverage
 4. **find-similar** - Detect duplicate or similar content
 5. **get-chapter-info** - Get comprehensive chapter overview
+6. **check-sync** - Check if outline, Zotero, and Scrivener are in sync
+
+This is just a start, there is a full-featured agent underneath that can think its way through complex requests, and draw on these skills to get them done.
 
 ### Quick Reference
 
@@ -68,6 +75,7 @@ Once indexed, Claude Code can use these skills:
 | **analyze-gaps** | Find weak chapters | "Analyze research gaps" |
 | **find-similar** | Detect duplicates | "Find similar content to: [text]" |
 | **get-chapter-info** | Chapter overview | "Get info about chapter 3" |
+| **check-sync** | Check alignment | "Check if chapters are in sync" |
 
 ### Usage Examples
 
@@ -154,7 +162,9 @@ Collections are matched by number: `{chapter_number}.` prefix
 
 ### Scrivener Setup
 
-The indexer will process RTF files in your Scrivener project. Chapter numbers are detected from folder names or can be configured in metadata.
+The system automatically reads your chapter structure from the Scrivener `.scrivx` file. Organize your project with numbered chapters (e.g., "1. Chapter Title", "Chapter 1: Title") for best results.
+
+The indexer will process RTF files in your Scrivener project and extract chapter numbers from folder names.
 
 ### Settings
 
@@ -302,6 +312,46 @@ docker compose restart indexer
 ```bash
 docker compose ps
 ```
+
+## Keeping Structure in Sync
+
+As you revise your book, chapter structure evolves. Keep these three sources aligned:
+
+1. **Scrivener** (definitive source of truth) - Actual manuscript chapters
+2. **Zotero Collections** - Research organized by chapter
+3. **`data/outline.txt`** - Narrative context for the AI agent
+
+### When You Restructure Chapters
+
+**Scrivener is your source of truth.** When you reorganize in Scrivener:
+
+1. Update Zotero collections to match (rename, renumber, merge as needed)
+2. Update `data/outline.txt` with new structure
+3. Re-index if chapter numbers changed: `docker compose restart indexer`
+
+### Check Sync Status
+
+Ask the AI agent to check alignment:
+
+```
+"Check if my chapters are in sync"
+"Run the sync check"
+```
+
+This reports:
+- Chapter counts across all sources
+- Specific mismatches
+- Recommendations for fixing
+
+### Common Scenarios
+
+**Adding a chapter:** Create matching Zotero collection `{number}. {title}`, update outline.txt, restart indexer
+
+**Renumbering chapters:** Rename Zotero collections to match, update outline.txt, full re-index (clear data/qdrant_storage)
+
+**Merging chapters:** Consolidate Zotero materials, update outline.txt, full re-index
+
+**The AI agent handles sync gracefully** - it will note discrepancies, ask clarifying questions, and work with available data rather than failing.
 
 ## Troubleshooting
 

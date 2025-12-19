@@ -39,7 +39,10 @@ config.local.json
 *.backup
 
 # Data directories
-data/
+data/*
+!data/project.example.json
+!data/outline.example.txt
+!data/.gitkeep
 vectordb/
 
 # MCP testing
