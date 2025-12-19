@@ -24,6 +24,9 @@ def create_agent():
     workflow.add_node("annotations", nodes.annotations_node)
     workflow.add_node("gap_analysis", nodes.gap_analysis_node)
     workflow.add_node("similarity", nodes.similarity_node)
+    workflow.add_node("chapter_info", nodes.chapter_info_node)
+    workflow.add_node("check_sync", nodes.check_sync_node)
+    workflow.add_node("list_chapters", nodes.list_chapters_node)
     workflow.add_node("analyze", nodes.analyze_node)
     workflow.add_node("refine", nodes.refinement_node)
 
@@ -42,6 +45,12 @@ def create_agent():
             return "gap_analysis"
         elif phase == "similarity":
             return "similarity"
+        elif phase == "chapter_info":
+            return "chapter_info"
+        elif phase == "check_sync":
+            return "check_sync"
+        elif phase == "list_chapters":
+            return "list_chapters"
         else:
             return END
 
@@ -69,6 +78,9 @@ def create_agent():
     workflow.add_edge("annotations", "analyze")
     workflow.add_edge("gap_analysis", "analyze")
     workflow.add_edge("similarity", "analyze")
+    workflow.add_edge("chapter_info", "analyze")
+    workflow.add_edge("check_sync", "analyze")
+    workflow.add_edge("list_chapters", "analyze")
 
     # Analysis can go to refinement or end
     workflow.add_conditional_edges("analyze", route_from_analysis)

@@ -1,5 +1,0 @@
-{
-  "name": "check-sync",
-  "description": "Check if outline.txt, Zotero collections, and Scrivener chapters are in sync. Shows mismatches and provides recommendations for syncing them up. Scrivener is the definitive source of truth.",
-  "parameters": {}
-}

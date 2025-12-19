@@ -53,51 +53,39 @@ docker compose logs -f indexer
 claude
 ```
 
-### Skills Available
+### What You Can Do
 
-Once indexed, Claude Code can use these skills:
+The TUI agent understands natural language queries about your research:
 
-1. **search-research** - Semantic search through indexed materials
-2. **get-annotations** - Retrieve all Zotero annotations for a chapter
-3. **analyze-gaps** - Identify research gaps in coverage
-4. **find-similar** - Detect duplicate or similar content
-5. **get-chapter-info** - Get comprehensive chapter overview
-6. **check-sync** - Check if outline, Zotero, and Scrivener are in sync
+**Search & Discovery:**
+- "Search for climate adaptation research in chapter 5"
+- "Find sources about urban heat islands"
+- "What research do I have about flood prediction?"
 
-This is just a start, there is a full-featured agent underneath that can think its way through complex requests, and draw on these skills to get them done.
+**Annotations & Notes:**
+- "Get all my Zotero annotations for chapter 9"
+- "Show me highlights from chapter 3 sources"
 
-### Quick Reference
+**Analysis & Gaps:**
+- "Which chapters need more research?"
+- "Analyze research gaps across the manuscript"
+- "What's missing from chapter 12?"
 
-| Skill | What It Does | Example |
-|-------|-------------|---------|
-| **search-research** | Semantic search | "Search for DEC firewall history" |
-| **get-annotations** | Get Zotero notes | "Get annotations for chapter 9" |
-| **analyze-gaps** | Find weak chapters | "Analyze research gaps" |
-| **find-similar** | Detect duplicates | "Find similar content to: [text]" |
-| **get-chapter-info** | Chapter overview | "Get info about chapter 3" |
-| **check-sync** | Check alignment | "Check if chapters are in sync" |
+**Structure & Organization:**
+- "List all my chapters"
+- "Get information about chapter 15"
+- "Check if my chapters are in sync"
+- "What chapters does my book have?"
 
-### Usage Examples
+**Similarity & Plagiarism:**
+- "Find similar content to this paragraph: [text]"
+- "Check for duplicate content"
 
-```
-# Search for specific content
-"Search for early DEC firewall implementations in chapter 2"
-
-# Get all your annotations
-"Get all annotations for chapter 9"
-
-# Analyze research coverage
-"Analyze research gaps for chapter 5"
-"Which chapters need more sources?"
-
-# Check for duplicates
-"Find similar content to this draft paragraph: [paste text]"
-
-# Get chapter overview
-"Get information about chapter 3"
-```
+The agent automatically routes your query to the right tools and synthesizes results into actionable insights.
 
 ## Architecture
+
+### System Overview
 
 ```
 ┌─────────────────────────────────────────┐
@@ -120,16 +108,54 @@ This is just a start, there is a full-featured agent underneath that can think i
 │  Docker: Qdrant (port 6333)            │
 │  └─ Vector database with embeddings    │
 └─────────────────────────────────────────┘
-          ↓ (query via skills)
+          ↓ (query via BookRAG)
 ┌─────────────────────────────────────────┐
-│  Claude Code Skills                     │
-│  ├─ search-research                    │
-│  ├─ get-annotations                    │
-│  ├─ analyze-gaps                       │
-│  ├─ find-similar                       │
-│  └─ get-chapter-info                   │
+│  TUI Agent (LangGraph)                 │
+│  └─ See agent flow diagram below       │
 └─────────────────────────────────────────┘
 ```
+
+### TUI Agent Flow
+
+The agent uses LangGraph to route queries through specialized nodes:
+
+```mermaid
+graph TD
+    Start([User Query]) --> Planning[Planning Node]
+    Planning --> Router{Query Type?}
+
+    Router -->|Search| Search[Search Node<br/>Semantic search]
+    Router -->|Annotations| Annotations[Annotations Node<br/>Get Zotero notes]
+    Router -->|Gaps| Gaps[Gap Analysis Node<br/>Find weak chapters]
+    Router -->|Similar| Similar[Similarity Node<br/>Find duplicates]
+    Router -->|Chapter Info| ChapterInfo[Chapter Info Node<br/>Get chapter details]
+    Router -->|Sync Check| Sync[Sync Check Node<br/>Compare sources]
+    Router -->|List| List[List Chapters Node<br/>Show all chapters]
+
+    Search --> Analyze[Analysis Node]
+    Annotations --> Analyze
+    Gaps --> Analyze
+    Similar --> Analyze
+    ChapterInfo --> Analyze
+    Sync --> Analyze
+    List --> Analyze
+
+    Analyze --> Decision{Need Refinement?}
+    Decision -->|Yes| Refine[Refinement Node]
+    Decision -->|No| End([Response])
+    Refine --> Analyze
+
+    style Planning fill:#e1f5ff
+    style Analyze fill:#fff4e1
+    style Router fill:#ffe1e1
+    style End fill:#e1ffe1
+```
+
+**How it works:**
+1. **Planning** - Classifies user query and determines which tool to use
+2. **Tool Nodes** - Execute specific research operations (search, get annotations, etc.)
+3. **Analysis** - LLM synthesizes results into coherent response
+4. **Refinement** - Optional loop if user provides feedback
 
 ### How It Works
 

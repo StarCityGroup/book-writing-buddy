@@ -177,8 +177,31 @@ Type `/exit` to quit and fix the configuration."""
             query: User's query text (lowercase)
 
         Returns:
-            Query type: 'search', 'annotations', 'gap_analysis', or 'similarity'
+            Query type: 'search', 'annotations', 'gap_analysis', 'similarity', etc.
         """
+        # Sync check queries
+        if any(word in query for word in ["sync", "aligned", "in sync", "out of sync"]):
+            return "check_sync"
+
+        # List chapters queries
+        if any(
+            phrase in query
+            for phrase in ["list chapters", "what chapters", "show chapters", "all chapters"]
+        ):
+            return "list_chapters"
+
+        # Chapter info queries
+        if any(
+            phrase in query
+            for phrase in [
+                "chapter info",
+                "info about chapter",
+                "information about chapter",
+                "chapter details",
+            ]
+        ):
+            return "chapter_info"
+
         # Annotations queries
         if any(word in query for word in ["annotation", "highlight", "note", "comment"]):
             return "annotations"
@@ -301,6 +324,21 @@ Type `/exit` to quit and fix the configuration."""
             context = self._format_similarity_results(state["similarity_results"])
             context_parts.append(f"## Similar Content\n{context}")
 
+        # Chapter info
+        if state.get("chapter_info"):
+            context = self._format_chapter_info(state["chapter_info"])
+            context_parts.append(f"## Chapter Information\n{context}")
+
+        # Sync status
+        if state.get("sync_status"):
+            context = self._format_sync_status(state["sync_status"])
+            context_parts.append(f"## Sync Status\n{context}")
+
+        # Chapters list
+        if state.get("chapters_list"):
+            context = self._format_chapters_list(state["chapters_list"])
+            context_parts.append(f"## Chapters\n{context}")
+
         full_context = "\n\n".join(context_parts)
 
         # System prompt for analysis
@@ -401,6 +439,54 @@ Build upon your previous analysis while incorporating the new direction."""
                 "user_feedback": None,
             }
 
+    def chapter_info_node(self, state: AgentState) -> Dict:
+        """Get comprehensive chapter information.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with chapter info
+        """
+        query = state.get("research_query", "")
+        chapter = self._extract_chapter_number(query)
+
+        if not chapter:
+            return {
+                "chapter_info": {"error": "No chapter number specified"},
+                "current_phase": "analyzing",
+            }
+
+        chapter_info = self.rag.get_chapter_info(chapter)
+
+        return {"chapter_info": chapter_info, "current_phase": "analyzing"}
+
+    def check_sync_node(self, state: AgentState) -> Dict:
+        """Check sync status between sources.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with sync status
+        """
+        sync_status = self.rag.check_sync()
+
+        return {"sync_status": sync_status, "current_phase": "analyzing"}
+
+    def list_chapters_node(self, state: AgentState) -> Dict:
+        """List all chapters from Scrivener.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with chapter list
+        """
+        chapters_info = self.rag.list_chapters()
+
+        return {"chapters_list": chapters_info, "current_phase": "analyzing"}
+
     def _extract_chapter_number(self, text: str) -> int:
         """Extract a single chapter number from text."""
         import re
@@ -481,5 +567,77 @@ Build upon your previous analysis while incorporating the new direction."""
                 f"**Source:** {meta.get('title', 'Unknown')}\n"
                 f"{r['text'][:200]}...\n"
             )
+
+        return "\n".join(formatted)
+
+    def _format_chapter_info(self, info: Dict) -> str:
+        """Format chapter info for LLM context."""
+        if info.get("error"):
+            return f"Error: {info['error']}"
+
+        chapter_num = info.get("chapter_number")
+        formatted = [f"Chapter {chapter_num} Information:"]
+
+        # Zotero info
+        zotero = info.get("zotero", {})
+        if zotero:
+            formatted.append(
+                f"\nZotero: {zotero.get('source_count', 0)} sources, "
+                f"{zotero.get('chunk_count', 0)} chunks indexed"
+            )
+
+        # Scrivener info
+        scrivener = info.get("scrivener", {})
+        if scrivener:
+            formatted.append(
+                f"Scrivener: ~{scrivener.get('estimated_words', 0)} words, "
+                f"{scrivener.get('chunk_count', 0)} chunks indexed"
+            )
+
+        formatted.append(f"\nTotal indexed chunks: {info.get('indexed_chunks', 0)}")
+
+        return "\n".join(formatted)
+
+    def _format_sync_status(self, status: Dict) -> str:
+        """Format sync status for LLM context."""
+        in_sync = status.get("in_sync", False)
+        formatted = ["✓ All sources in sync" if in_sync else "⚠ Sources are out of sync"]
+
+        formatted.append(
+            f"\nScrivener: {len(status.get('scrivener_chapters', {}))} chapters"
+        )
+        formatted.append(f"Zotero: {len(status.get('zotero_chapters', {}))} chapters")
+        formatted.append(f"Outline: {len(status.get('outline_chapters', {}))} chapters")
+
+        mismatches = status.get("mismatches", [])
+        if mismatches:
+            formatted.append(f"\n{len(mismatches)} mismatches found:")
+            for m in mismatches[:5]:  # Show first 5
+                formatted.append(f"- {m['message']}")
+
+        recommendations = status.get("recommendations", [])
+        if recommendations:
+            formatted.append("\nRecommendations:")
+            for rec in recommendations[:3]:
+                formatted.append(f"- {rec}")
+
+        return "\n".join(formatted)
+
+    def _format_chapters_list(self, info: Dict) -> str:
+        """Format chapters list for LLM context."""
+        if info.get("error"):
+            return f"Error: {info['error']}"
+
+        formatted = [
+            f"Project: {info.get('project_name', 'Unknown')}",
+            f"Total chapters: {info.get('chapter_count', 0)}\n",
+        ]
+
+        chapters = info.get("chapters", [])
+        for ch in chapters[:10]:  # Show first 10
+            formatted.append(f"Chapter {ch['number']}: {ch['title']}")
+
+        if len(chapters) > 10:
+            formatted.append(f"... and {len(chapters) - 10} more chapters")
 
         return "\n".join(formatted)

@@ -1,6 +1,7 @@
 """RAG module for book research using Qdrant."""
 
 import os
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import structlog
 
+from .scrivener_parser import ScrivenerParser
 from .vectordb.client import VectorDBClient
 
 logger = structlog.get_logger()
@@ -241,3 +243,229 @@ class BookRAG:
             "last_indexed": formatted_timestamps,
             "raw_timestamps": timestamps,
         }
+
+    def get_chapter_info(self, chapter_number: int) -> Dict[str, Any]:
+        """Get comprehensive information about a chapter.
+
+        Args:
+            chapter_number: Chapter number
+
+        Returns:
+            Dict with chapter metadata, source counts, and content stats
+        """
+        info = {
+            "chapter_number": chapter_number,
+            "zotero": {},
+            "scrivener": {},
+            "indexed_chunks": 0,
+        }
+
+        # Get indexed chunk count
+        results = self.search(
+            query="chapter content",
+            filters={"chapter_number": chapter_number},
+            limit=1000,
+            score_threshold=0.0,
+        )
+        info["indexed_chunks"] = len(results)
+
+        # Get Zotero info from indexed data
+        zotero_results = [r for r in results if r["metadata"].get("source_type") == "zotero"]
+        if zotero_results:
+            # Extract unique sources
+            sources = set()
+            for r in zotero_results:
+                title = r["metadata"].get("title")
+                if title:
+                    sources.add(title)
+            info["zotero"] = {
+                "source_count": len(sources),
+                "chunk_count": len(zotero_results),
+                "sources": list(sources)[:10],  # Limit to 10 for display
+            }
+
+        # Get Scrivener info from indexed data
+        scrivener_results = [
+            r for r in results if r["metadata"].get("source_type") == "scrivener"
+        ]
+        if scrivener_results:
+            word_count = sum(len(r["text"].split()) for r in scrivener_results)
+            info["scrivener"] = {
+                "chunk_count": len(scrivener_results),
+                "estimated_words": word_count,
+            }
+
+        return info
+
+    def check_sync(self) -> Dict[str, Any]:
+        """Check sync status between outline.txt, Zotero, and Scrivener.
+
+        Returns:
+            Dict with sync status, mismatches, and recommendations
+        """
+        # Get chapters from outline.txt
+        outline_chapters = self._extract_chapters_from_outline()
+
+        # Get chapters from indexed data
+        zotero_chapters = self._get_indexed_chapters("zotero")
+        scrivener_chapters = self._get_indexed_chapters("scrivener")
+
+        # Find mismatches
+        all_chapters = (
+            set(outline_chapters.keys())
+            | set(zotero_chapters.keys())
+            | set(scrivener_chapters.keys())
+        )
+        mismatches = []
+
+        for chapter_num in sorted(all_chapters):
+            in_outline = chapter_num in outline_chapters
+            in_zotero = chapter_num in zotero_chapters
+            in_scrivener = chapter_num in scrivener_chapters
+
+            if in_scrivener and not in_zotero:
+                mismatches.append(
+                    {
+                        "chapter": chapter_num,
+                        "type": "missing_from_zotero",
+                        "severity": "medium",
+                        "message": f"Chapter {chapter_num} exists in Scrivener but has no Zotero collection",
+                    }
+                )
+            elif in_scrivener and not in_outline:
+                mismatches.append(
+                    {
+                        "chapter": chapter_num,
+                        "type": "missing_from_outline",
+                        "severity": "low",
+                        "message": f"Chapter {chapter_num} exists in Scrivener but not in outline.txt",
+                    }
+                )
+            elif not in_scrivener and (in_zotero or in_outline):
+                mismatches.append(
+                    {
+                        "chapter": chapter_num,
+                        "type": "missing_from_scrivener",
+                        "severity": "high",
+                        "message": f"Chapter {chapter_num} exists in outline/Zotero but not in Scrivener",
+                    }
+                )
+
+        # Generate recommendations
+        recommendations = []
+        if any(m["type"] == "missing_from_zotero" for m in mismatches):
+            chapters_list = [
+                str(m["chapter"])
+                for m in mismatches
+                if m["type"] == "missing_from_zotero"
+            ]
+            recommendations.append(
+                f"Create Zotero collections for chapters: {', '.join(chapters_list)}"
+            )
+        if any(m["type"] == "missing_from_outline" for m in mismatches):
+            recommendations.append(
+                "Update data/outline.txt to match your current Scrivener chapter structure"
+            )
+        if any(m["type"] == "missing_from_scrivener" for m in mismatches):
+            chapters_list = [
+                str(m["chapter"])
+                for m in mismatches
+                if m["type"] == "missing_from_scrivener"
+            ]
+            recommendations.append(
+                f"Chapters {', '.join(chapters_list)} may have been removed or renumbered in Scrivener. "
+                "Update Zotero/outline to match."
+            )
+
+        if not mismatches:
+            recommendations.append("All sources are in sync")
+        else:
+            recommendations.append(
+                "Remember: Scrivener is your definitive chapter structure. "
+                "Organize Zotero and outline.txt to match it."
+            )
+
+        return {
+            "in_sync": len(mismatches) == 0,
+            "outline_chapters": outline_chapters,
+            "zotero_chapters": zotero_chapters,
+            "scrivener_chapters": scrivener_chapters,
+            "mismatches": mismatches,
+            "recommendations": recommendations,
+        }
+
+    def list_chapters(self) -> Dict[str, Any]:
+        """List all chapters from Scrivener structure.
+
+        Returns:
+            Dict with chapter list from Scrivener
+        """
+        scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
+        if not scrivener_path or not Path(scrivener_path).exists():
+            return {"error": "Scrivener project path not configured or doesn't exist"}
+
+        try:
+            parser = ScrivenerParser(scrivener_path)
+            structure = parser.get_chapter_structure()
+            return {
+                "project_name": structure["project_name"],
+                "chapter_count": len(structure["chapters"]),
+                "chapters": structure["chapters"],
+            }
+        except Exception as e:
+            logger.error(f"Error listing chapters: {e}")
+            return {"error": str(e)}
+
+    def _extract_chapters_from_outline(self) -> Dict[int, str]:
+        """Extract chapter numbers and titles from outline.txt."""
+        outline_path = Path("data/outline.txt")
+        if not outline_path.exists():
+            return {}
+
+        content = outline_path.read_text()
+        chapters = {}
+
+        patterns = [
+            r"[Cc]hapter\s+(\d+)[:\.]?\s*[:-]?\s*(.+)",
+            r"^\s*(\d+)\.\s+(.+)",
+        ]
+
+        for line in content.split("\n"):
+            for pattern in patterns:
+                match = re.search(pattern, line)
+                if match:
+                    num = int(match.group(1))
+                    title = match.group(2).strip()
+                    title = re.sub(r"\s*-\s*.+$", "", title).strip()
+                    chapters[num] = title
+                    break
+
+        return chapters
+
+    def _get_indexed_chapters(self, source_type: str) -> Dict[int, Dict]:
+        """Get chapters from indexed data for given source type."""
+        try:
+            # Query all indexed data for this source type
+            results = self.search(
+                query="chapter content",
+                filters={"source_type": source_type},
+                limit=1000,
+                score_threshold=0.0,
+            )
+
+            chapters = {}
+            for result in results:
+                meta = result["metadata"]
+                chapter_num = meta.get("chapter_number")
+                if chapter_num:
+                    if chapter_num not in chapters:
+                        chapters[chapter_num] = {
+                            "title": meta.get("chapter_title", "Unknown"),
+                            "chunk_count": 0,
+                        }
+                    chapters[chapter_num]["chunk_count"] += 1
+
+            return chapters
+        except Exception as e:
+            logger.error(f"Error getting indexed chapters for {source_type}: {e}")
+            return {}
