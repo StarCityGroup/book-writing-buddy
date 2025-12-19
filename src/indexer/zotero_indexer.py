@@ -172,6 +172,11 @@ class ZoteroIndexer:
                 stats["collections_indexed"] += 1
                 stats["chunks_indexed"] += chunks
 
+        # Update index timestamp
+        from datetime import datetime
+        timestamp = datetime.now().isoformat()
+        self.vectordb.set_index_timestamp("zotero", timestamp)
+
         return stats
 
     def _index_item(self, item: Dict[str, Any], collection_id: int) -> int:

@@ -82,6 +82,12 @@ class ScrivenerIndexer:
         logger.info(
             f"Indexed {stats['documents_indexed']} Scrivener documents, {stats['chunks_indexed']} chunks"
         )
+
+        # Update index timestamp
+        from datetime import datetime
+        timestamp = datetime.now().isoformat()
+        self.vectordb.set_index_timestamp("scrivener", timestamp)
+
         return stats
 
     def index_folder(self, folder_name: str) -> int:
