@@ -7,9 +7,9 @@ from pathlib import Path
 
 import structlog
 
-from ..vectordb.client import VectorDBClient
-from ..indexer.zotero_indexer import ZoteroIndexer
 from ..indexer.scrivener_indexer import ScrivenerIndexer
+from ..indexer.zotero_indexer import ZoteroIndexer
+from ..vectordb.client import VectorDBClient
 from .file_watcher import FileWatcherDaemon
 
 logger = structlog.get_logger()

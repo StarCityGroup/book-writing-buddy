@@ -222,6 +222,103 @@ Skills are automatically available in Claude Code. Example usage:
 "Analyze research gaps across the manuscript"
 ```
 
+## TUI Agent Capabilities
+
+The interactive TUI agent (`uv run main.py`) provides natural language access to all research tools through a LangGraph-powered conversational interface.
+
+### Core Query Types
+
+**Semantic Search:**
+- "Search for climate adaptation research in chapter 5"
+- "Find sources about urban heat islands"
+
+**Annotations & Notes:**
+- "Get all my Zotero annotations for chapter 9"
+- "Show me highlights from chapter 3 sources"
+
+**Gap Analysis:**
+- "Which chapters need more research?"
+- "Analyze research gaps across the manuscript"
+
+**Similarity Detection:**
+- "Find similar content to this paragraph: [text]"
+- "Check for duplicate content"
+
+**Structure & Organization:**
+- "List all my chapters"
+- "Check if my chapters are in sync"
+
+### Advanced Analysis Features (NEW)
+
+**Cross-Chapter Theme Tracking:**
+Track concepts and themes across the entire manuscript to maintain consistency:
+- "Track the theme 'resilience' across all chapters"
+- "Where does 'infrastructure failure' appear in the book?"
+- "Find mentions of 'adaptation trap' across chapters"
+
+Uses semantic search to find related content even when exact wording differs.
+
+**Chapter Comparison:**
+Compare research density, source counts, and coverage between chapters:
+- "Compare research density between chapters 5 and 9"
+- "Which has more sources, chapter 3 or chapter 7?"
+- "Compare chapters 2 and 8"
+
+Helps identify chapters that need more research and maintain balanced coverage.
+
+**Source Diversity Analysis:**
+Evaluate source type balance using Simpson's Diversity Index:
+- "Analyze source diversity for chapter 3"
+- "Am I relying too heavily on one type of source in chapter 9?"
+- "What types of sources does chapter 5 use?"
+
+Ensures academic rigor through balanced mix of books, articles, reports, etc.
+
+**Key Source Identification:**
+Find most-referenced sources in each chapter:
+- "What are the key sources for chapter 9?"
+- "Show me the most cited sources in chapter 12"
+- "Which sources am I referencing most in chapter 3?"
+
+Helps ensure you're not over-relying on single sources.
+
+**Export & Summarization:**
+Generate formatted research summaries and bibliographies:
+- "Export a research summary for chapter 7"
+- "Generate an APA bibliography for chapter 4"
+- "Create a research brief for chapter 5 in markdown"
+- "Show me citations for chapter 9 in MLA format"
+
+Perfect for preparing reference materials before writing sessions.
+
+**Research Timeline:**
+Track when research materials were collected:
+- "What research have I added recently?"
+- "Show me the research timeline for chapter 9"
+- "What did I index last week?"
+- "Timeline of research collection for the whole book"
+
+Helps identify research collection patterns and gaps over time.
+
+**Smart Cross-References:**
+Get AI-powered suggestions for relevant research from other chapters:
+- "Suggest related research for chapter 5"
+- "What from other chapters is relevant to chapter 8?"
+- "Find cross-references for chapter 12"
+
+Uses semantic similarity to discover connections you might have missed.
+
+### How Agent Routing Works
+
+The agent automatically classifies your query and routes to the appropriate tool:
+
+1. **Planning Phase**: Understands your question and intent
+2. **Tool Execution**: Runs the right BookRAG method(s)
+3. **Analysis Phase**: AI synthesizes results into actionable insights
+4. **Refinement** (optional): Provides follow-up details if you ask
+
+All queries are handled conversationally - no need to learn specific commands or syntax.
+
 ## Error Handling
 
 ### Common Issues

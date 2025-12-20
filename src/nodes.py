@@ -126,7 +126,8 @@ Keep your response brief - just acknowledge the request. The system will automat
 
         # Add system message if this is first planning interaction
         if not any(
-            isinstance(get_msg_content(m), str) and "PLANNING phase" in get_msg_content(m)
+            isinstance(get_msg_content(m), str)
+            and "PLANNING phase" in get_msg_content(m)
             for m in messages
         ):
             messages = [{"role": "system", "content": system_prompt}] + list(messages)
@@ -186,7 +187,12 @@ Type `/exit` to quit and fix the configuration."""
         # List chapters queries
         if any(
             phrase in query
-            for phrase in ["list chapters", "what chapters", "show chapters", "all chapters"]
+            for phrase in [
+                "list chapters",
+                "what chapters",
+                "show chapters",
+                "all chapters",
+            ]
         ):
             return "list_chapters"
 
@@ -202,12 +208,116 @@ Type `/exit` to quit and fix the configuration."""
         ):
             return "chapter_info"
 
+        # Cross-chapter theme queries
+        if any(
+            phrase in query
+            for phrase in [
+                "cross chapter",
+                "across chapters",
+                "theme across",
+                "track theme",
+                "where does",
+                "appears in",
+            ]
+        ):
+            return "cross_chapter_theme"
+
+        # Compare chapters queries
+        if any(
+            phrase in query
+            for phrase in ["compare chapter", "comparison", "versus", "vs chapter"]
+        ):
+            return "compare_chapters"
+
+        # Source diversity queries
+        if any(
+            phrase in query
+            for phrase in [
+                "source diversity",
+                "diversity of sources",
+                "source types",
+                "balance of sources",
+                "too many",
+                "relying on",
+            ]
+        ):
+            return "source_diversity"
+
+        # Key sources queries
+        if any(
+            phrase in query
+            for phrase in [
+                "key sources",
+                "most cited",
+                "main sources",
+                "heavily cited",
+                "most referenced",
+            ]
+        ):
+            return "key_sources"
+
+        # Export/summary queries
+        if any(
+            phrase in query
+            for phrase in [
+                "export summary",
+                "chapter summary",
+                "summarize chapter",
+                "research brief",
+            ]
+        ):
+            return "export_summary"
+
+        # Bibliography queries
+        if any(
+            phrase in query
+            for phrase in [
+                "bibliography",
+                "citations",
+                "references",
+                "cite",
+                "citation format",
+            ]
+        ):
+            return "bibliography"
+
+        # Timeline queries
+        if any(
+            phrase in query
+            for phrase in [
+                "recent",
+                "recently added",
+                "timeline",
+                "when did i",
+                "last week",
+            ]
+        ):
+            return "timeline"
+
+        # Related research queries
+        if any(
+            phrase in query
+            for phrase in [
+                "related research",
+                "suggest research",
+                "other chapters",
+                "cross reference",
+                "relevant from",
+            ]
+        ):
+            return "related_research"
+
         # Annotations queries
-        if any(word in query for word in ["annotation", "highlight", "note", "comment"]):
+        if any(
+            word in query for word in ["annotation", "highlight", "note", "comment"]
+        ):
             return "annotations"
 
         # Gap analysis queries
-        if any(word in query for word in ["gap", "missing", "coverage", "weak", "need more"]):
+        if any(
+            word in query
+            for word in ["gap", "missing", "coverage", "weak", "need more"]
+        ):
             return "gap_analysis"
 
         # Similarity queries
@@ -299,7 +409,6 @@ Type `/exit` to quit and fix the configuration."""
             Updated state with analysis
         """
         query = state.get("research_query", "")
-        phase = state.get("current_phase", "analyzing")
 
         # Build context from gathered data
         context_parts = []
@@ -338,6 +447,46 @@ Type `/exit` to quit and fix the configuration."""
         if state.get("chapters_list"):
             context = self._format_chapters_list(state["chapters_list"])
             context_parts.append(f"## Chapters\n{context}")
+
+        # Cross-chapter theme
+        if state.get("cross_chapter_theme"):
+            context = self._format_cross_chapter_theme(state["cross_chapter_theme"])
+            context_parts.append(f"## Cross-Chapter Theme Analysis\n{context}")
+
+        # Chapter comparison
+        if state.get("chapter_comparison"):
+            context = self._format_chapter_comparison(state["chapter_comparison"])
+            context_parts.append(f"## Chapter Comparison\n{context}")
+
+        # Source diversity
+        if state.get("source_diversity"):
+            context = self._format_source_diversity(state["source_diversity"])
+            context_parts.append(f"## Source Diversity Analysis\n{context}")
+
+        # Key sources
+        if state.get("key_sources"):
+            context = self._format_key_sources(state["key_sources"])
+            context_parts.append(f"## Key Sources\n{context}")
+
+        # Export summary
+        if state.get("export_summary"):
+            context = self._format_export_summary(state["export_summary"])
+            context_parts.append(f"## Chapter Research Summary\n{context}")
+
+        # Bibliography
+        if state.get("bibliography"):
+            context = self._format_bibliography(state["bibliography"])
+            context_parts.append(f"## Bibliography\n{context}")
+
+        # Timeline
+        if state.get("timeline"):
+            context = self._format_timeline(state["timeline"])
+            context_parts.append(f"## Research Timeline\n{context}")
+
+        # Related research
+        if state.get("related_research"):
+            context = self._format_related_research(state["related_research"])
+            context_parts.append(f"## Related Research Suggestions\n{context}")
 
         full_context = "\n\n".join(context_parts)
 
@@ -403,9 +552,7 @@ Be thorough but concise. Focus on actionable insights that help advance the book
         messages = state.get("messages", [])
 
         # Add user feedback
-        messages_with_feedback = messages + [
-            {"role": "user", "content": feedback}
-        ]
+        messages_with_feedback = messages + [{"role": "user", "content": feedback}]
 
         # System prompt for refinement
         system_prompt = """You are refining your previous research analysis based on user feedback.
@@ -550,7 +697,9 @@ Build upon your previous analysis while incorporating the new direction."""
                 status = data["status"]
                 count = data["chunk_count"]
                 emoji = "✓" if status == "adequate" else "⚠"
-                formatted.append(f"  {emoji} Chapter {chapter_num}: {count} chunks ({status})")
+                formatted.append(
+                    f"  {emoji} Chapter {chapter_num}: {count} chunks ({status})"
+                )
 
         return "\n".join(formatted)
 
@@ -601,7 +750,9 @@ Build upon your previous analysis while incorporating the new direction."""
     def _format_sync_status(self, status: Dict) -> str:
         """Format sync status for LLM context."""
         in_sync = status.get("in_sync", False)
-        formatted = ["✓ All sources in sync" if in_sync else "⚠ Sources are out of sync"]
+        formatted = [
+            "✓ All sources in sync" if in_sync else "⚠ Sources are out of sync"
+        ]
 
         formatted.append(
             f"\nScrivener: {len(status.get('scrivener_chapters', {}))} chapters"
@@ -639,5 +790,441 @@ Build upon your previous analysis while incorporating the new direction."""
 
         if len(chapters) > 10:
             formatted.append(f"... and {len(chapters) - 10} more chapters")
+
+        return "\n".join(formatted)
+
+    # ========================================================================
+    # New Tool Nodes
+    # ========================================================================
+
+    def cross_chapter_theme_node(self, state: AgentState) -> Dict:
+        """Track a theme across multiple chapters.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with cross-chapter theme results
+        """
+        query = state.get("research_query", "")
+        # Extract the theme/keyword from the query
+        keyword = self._extract_theme_keyword(query)
+
+        if not keyword:
+            return {
+                "cross_chapter_theme": {"error": "No theme keyword specified"},
+                "current_phase": "analyzing",
+            }
+
+        results = self.rag.find_cross_chapter_themes(keyword=keyword)
+
+        return {"cross_chapter_theme": results, "current_phase": "analyzing"}
+
+    def compare_chapters_node(self, state: AgentState) -> Dict:
+        """Compare two chapters.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with comparison results
+        """
+        query = state.get("research_query", "")
+        chapters = self._extract_chapter_numbers(query)
+
+        if not chapters or len(chapters) < 2:
+            return {
+                "chapter_comparison": {"error": "Need two chapter numbers to compare"},
+                "current_phase": "analyzing",
+            }
+
+        comparison = self.rag.compare_chapters(chapters[0], chapters[1])
+
+        return {"chapter_comparison": comparison, "current_phase": "analyzing"}
+
+    def source_diversity_node(self, state: AgentState) -> Dict:
+        """Analyze source diversity for a chapter.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with diversity analysis
+        """
+        query = state.get("research_query", "")
+        chapter = self._extract_chapter_number(query)
+
+        if not chapter:
+            return {
+                "source_diversity": {"error": "No chapter number specified"},
+                "current_phase": "analyzing",
+            }
+
+        diversity = self.rag.analyze_source_diversity(chapter)
+
+        return {"source_diversity": diversity, "current_phase": "analyzing"}
+
+    def key_sources_node(self, state: AgentState) -> Dict:
+        """Identify key sources for a chapter.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with key sources
+        """
+        query = state.get("research_query", "")
+        chapter = self._extract_chapter_number(query)
+
+        if not chapter:
+            return {
+                "key_sources": {"error": "No chapter number specified"},
+                "current_phase": "analyzing",
+            }
+
+        key_sources = self.rag.identify_key_sources(chapter)
+
+        return {"key_sources": key_sources, "current_phase": "analyzing"}
+
+    def export_summary_node(self, state: AgentState) -> Dict:
+        """Export chapter research summary.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with exported summary
+        """
+        query = state.get("research_query", "")
+        chapter = self._extract_chapter_number(query)
+
+        if not chapter:
+            return {
+                "export_summary": {"error": "No chapter number specified"},
+                "current_phase": "analyzing",
+            }
+
+        # Default to markdown format
+        summary = self.rag.export_chapter_summary(chapter, format="markdown")
+
+        return {
+            "export_summary": {"chapter": chapter, "summary": summary},
+            "current_phase": "analyzing",
+        }
+
+    def bibliography_node(self, state: AgentState) -> Dict:
+        """Generate bibliography.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with bibliography
+        """
+        query = state.get("research_query", "")
+        chapter = self._extract_chapter_number(query)
+
+        # Detect citation style from query
+        style = "apa"  # default
+        if "mla" in query.lower():
+            style = "mla"
+        elif "chicago" in query.lower():
+            style = "chicago"
+
+        bibliography = self.rag.generate_bibliography(chapter=chapter, style=style)
+
+        return {"bibliography": bibliography, "current_phase": "analyzing"}
+
+    def timeline_node(self, state: AgentState) -> Dict:
+        """Get research timeline.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with timeline
+        """
+        query = state.get("research_query", "")
+
+        # Check if asking for recent additions
+        if "recent" in query.lower() or "last week" in query.lower():
+            days = 7
+            if "last month" in query.lower():
+                days = 30
+            timeline = self.rag.get_recent_additions(days=days)
+        else:
+            # Full timeline
+            chapter = self._extract_chapter_number(query)
+            timeline = self.rag.get_research_timeline(chapter=chapter)
+
+        return {"timeline": timeline, "current_phase": "analyzing"}
+
+    def related_research_node(self, state: AgentState) -> Dict:
+        """Suggest related research from other chapters.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with suggestions
+        """
+        query = state.get("research_query", "")
+        chapter = self._extract_chapter_number(query)
+
+        if not chapter:
+            return {
+                "related_research": {"error": "No chapter number specified"},
+                "current_phase": "analyzing",
+            }
+
+        suggestions = self.rag.suggest_related_research(chapter)
+
+        return {"related_research": suggestions, "current_phase": "analyzing"}
+
+    def _extract_theme_keyword(self, text: str) -> str:
+        """Extract theme keyword from query text."""
+        # Look for quoted strings first
+        import re
+
+        quoted = re.search(r'["\']([^"\']+)["\']', text)
+        if quoted:
+            return quoted.group(1)
+
+        # Look for "theme of X" or "track X" patterns
+        patterns = [
+            r"theme (?:of |about )?(.+?)(?:\s+across|\s+in|\?|$)",
+            r"track (?:the )?(.+?)(?:\s+across|\s+in|\?|$)",
+            r"(?:where does|find) (.+?)(?:\s+appear|\s+show|\s+in|\?|$)",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                keyword = match.group(1).strip()
+                # Remove common words
+                keyword = re.sub(
+                    r"\b(the|a|an|this|that)\b", "", keyword, flags=re.IGNORECASE
+                )
+                return keyword.strip()
+
+        # Default: use the whole query
+        return text
+
+    # ========================================================================
+    # Formatting Methods for New Data Types
+    # ========================================================================
+
+    def _format_cross_chapter_theme(self, results: Dict) -> str:
+        """Format cross-chapter theme results for LLM context."""
+        if results.get("error"):
+            return f"Error: {results['error']}"
+
+        keyword = results.get("keyword", "Unknown")
+        total_chapters = results.get("total_chapters", 0)
+        total_mentions = results.get("total_mentions", 0)
+
+        formatted = [
+            f"Tracking theme: **{keyword}**",
+            f"Found in {total_chapters} chapters with {total_mentions} mentions\n",
+        ]
+
+        chapters = results.get("chapters", [])
+        for ch in chapters[:10]:  # Show first 10
+            ch_num = ch["chapter_number"]
+            ch_title = ch["chapter_title"]
+            mentions = ch["mentions"]
+            formatted.append(
+                f"\n**Chapter {ch_num}: {ch_title}** ({len(mentions)} mentions)"
+            )
+            for mention in mentions[:3]:  # Show first 3 mentions per chapter
+                formatted.append(
+                    f"  - ({mention['score']:.0%}) {mention['text'][:150]}..."
+                )
+
+        return "\n".join(formatted)
+
+    def _format_chapter_comparison(self, comparison: Dict) -> str:
+        """Format chapter comparison for LLM context."""
+        if comparison.get("error"):
+            return f"Error: {comparison['error']}"
+
+        ch1 = comparison["chapter1"]
+        ch2 = comparison["chapter2"]
+        comp = comparison["comparison"]
+
+        formatted = [
+            f"**Chapter {ch1['number']}:**",
+            f"  - Sources: {ch1['zotero_sources']}",
+            f"  - Research chunks: {ch1['zotero_chunks']}",
+            f"  - Draft words: ~{ch1['scrivener_words']}",
+            f"  - Research density: {ch1['research_density']:.3f}",
+            "",
+            f"**Chapter {ch2['number']}:**",
+            f"  - Sources: {ch2['zotero_sources']}",
+            f"  - Research chunks: {ch2['zotero_chunks']}",
+            f"  - Draft words: ~{ch2['scrivener_words']}",
+            f"  - Research density: {ch2['research_density']:.3f}",
+            "",
+            "**Comparison:**",
+            f"  - More sources: Chapter {comp['more_sources']}",
+            f"  - More research-dense: Chapter {comp['more_research_dense']}",
+            f"  - Density ratio: {comp['density_ratio']:.2f}x",
+        ]
+
+        return "\n".join(formatted)
+
+    def _format_source_diversity(self, diversity: Dict) -> str:
+        """Format source diversity for LLM context."""
+        if diversity.get("error"):
+            return f"Error: {diversity['error']}"
+
+        chapter = diversity["chapter"]
+        total = diversity["total_sources"]
+        score = diversity["diversity_score"]
+
+        formatted = [
+            f"Chapter {chapter} has {total} unique sources",
+            f"Diversity score: {score} (0=homogeneous, 1=diverse)\n",
+        ]
+
+        source_types = diversity.get("source_types", {})
+        if source_types:
+            formatted.append("**Source types:**")
+            for item_type, count in sorted(
+                source_types.items(), key=lambda x: x[1], reverse=True
+            ):
+                formatted.append(f"  - {item_type}: {count}")
+
+        most_cited = diversity.get("most_cited", [])
+        if most_cited:
+            formatted.append("\n**Most cited sources:**")
+            for src in most_cited[:5]:
+                formatted.append(f"  - {src['title']}: {src['chunks']} chunks")
+
+        return "\n".join(formatted)
+
+    def _format_key_sources(self, key_sources: Dict) -> str:
+        """Format key sources for LLM context."""
+        if key_sources.get("error"):
+            return f"Error: {key_sources['error']}"
+
+        chapter = key_sources["chapter"]
+        count = key_sources["key_sources_count"]
+        threshold = key_sources["threshold"]
+
+        formatted = [
+            f"Chapter {chapter}: {count} key sources (threshold: {threshold}+ mentions)\n"
+        ]
+
+        sources = key_sources.get("key_sources", [])
+        for src in sources[:15]:  # Show top 15
+            formatted.append(
+                f"- **{src['title']}** ({src['item_type']}): {src['chunk_count']} chunks"
+            )
+
+        return "\n".join(formatted)
+
+    def _format_export_summary(self, export: Dict) -> str:
+        """Format exported summary for LLM context."""
+        if export.get("error"):
+            return f"Error: {export['error']}"
+
+        chapter = export["chapter"]
+        summary = export["summary"]
+
+        # Just return the summary as-is (it's already formatted)
+        return f"Summary for Chapter {chapter}:\n\n{summary}"
+
+    def _format_bibliography(self, bibliography: List[Dict]) -> str:
+        """Format bibliography for LLM context."""
+        if not bibliography:
+            return "No sources found"
+
+        formatted = [f"Found {len(bibliography)} sources:\n"]
+
+        for i, entry in enumerate(bibliography[:20], 1):  # Show first 20
+            citation = entry["citation"]
+            chapters = entry.get("chapters", [])
+            ch_str = f" (Chapters: {', '.join(map(str, chapters))})" if chapters else ""
+            formatted.append(f"{i}. {citation}{ch_str}")
+
+        if len(bibliography) > 20:
+            formatted.append(f"\n... and {len(bibliography) - 20} more sources")
+
+        return "\n".join(formatted)
+
+    def _format_timeline(self, timeline: Dict) -> str:
+        """Format research timeline for LLM context."""
+        # Check if it's recent additions or full timeline
+        if "sources" in timeline:
+            # Recent additions format
+            cutoff = timeline.get("cutoff_date", "Unknown")
+            sources = timeline.get("sources", {})
+
+            if not sources:
+                return f"No research added since {cutoff}"
+
+            formatted = [f"Research added since {cutoff}:\n"]
+            for source_type, info in sources.items():
+                formatted.append(
+                    f"- {source_type}: indexed {info['indexed_at']} "
+                    f"({info['age_hours']} hours ago)"
+                )
+
+            return "\n".join(formatted)
+        else:
+            # Full timeline format
+            chapter = timeline.get("chapter")
+            periods = timeline.get("total_periods", 0)
+            timeline_list = timeline.get("timeline", [])
+
+            if not timeline_list:
+                return "No timeline data available"
+
+            header = (
+                f"Research timeline for Chapter {chapter}"
+                if chapter
+                else "Research timeline"
+            )
+            formatted = [f"{header} ({periods} time periods):\n"]
+
+            for period in timeline_list[:12]:  # Show last 12 months
+                month = period["month"]
+                count = period["count"]
+                chapters = period.get("chapters", [])
+                ch_str = (
+                    f" (Chapters: {', '.join(map(str, chapters))})" if chapters else ""
+                )
+                formatted.append(f"- {month}: {count} chunks indexed{ch_str}")
+
+            return "\n".join(formatted)
+
+    def _format_related_research(self, suggestions: Dict) -> str:
+        """Format related research suggestions for LLM context."""
+        if suggestions.get("error"):
+            return f"Error: {suggestions['error']}"
+
+        chapter = suggestions["chapter"]
+        count = suggestions["suggestions_count"]
+        chapters_count = suggestions["chapters_with_suggestions"]
+
+        if count == 0:
+            return f"No related research found for Chapter {chapter}"
+
+        formatted = [
+            f"Found {count} related items from {chapters_count} other chapters:\n"
+        ]
+
+        for ch_group in suggestions.get("suggestions", [])[:5]:  # Show top 5 chapters
+            ch_num = ch_group["chapter"]
+            ch_title = ch_group["chapter_title"]
+            items = ch_group["items"]
+            formatted.append(f"\n**Chapter {ch_num}: {ch_title}** ({len(items)} items)")
+
+            for item in items[:3]:  # Show top 3 items per chapter
+                formatted.append(
+                    f"  - ({item['relevance']:.0%}) {item['source']}: "
+                    f"{item['text_preview'][:100]}..."
+                )
 
         return "\n".join(formatted)

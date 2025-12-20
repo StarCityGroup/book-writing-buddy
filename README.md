@@ -49,9 +49,11 @@ docker compose up --build -d
 # Check logs to see indexing progress
 docker compose logs -f indexer
 
-# You're ready! Use Claude Code
-claude
+# You're ready! Start the TUI agent
+uv run main.py
 ```
+
+**Note:** You can also use the Claude Code CLI directly with `claude` if you have it installed.
 
 ### What You Can Do
 

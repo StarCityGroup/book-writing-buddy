@@ -25,3 +25,14 @@ target-version = "py38"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
+# Ignore line length errors (E501) - enforced by formatter
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+pythonpath = "."
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

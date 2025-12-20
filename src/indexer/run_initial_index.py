@@ -3,14 +3,13 @@
 
 import json
 import os
-import sys
 from pathlib import Path
 
 import structlog
 
 from ..vectordb.client import VectorDBClient
-from .zotero_indexer import ZoteroIndexer
 from .scrivener_indexer import ScrivenerIndexer
+from .zotero_indexer import ZoteroIndexer
 
 logger = structlog.get_logger()
 
