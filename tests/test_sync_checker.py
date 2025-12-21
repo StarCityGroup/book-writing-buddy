@@ -20,7 +20,7 @@ def test_sync_check(sync_checker):
     status = sync_checker.check_sync_status()
 
     print(f"📊 Sync Status: {'✅ In Sync' if status['in_sync'] else '⚠️ Out of Sync'}")
-    print(f"\n📚 Chapter Counts:")
+    print("\n📚 Chapter Counts:")
     print(f"  Scrivener: {len(status['scrivener_chapters'])}")
     print(f"  Zotero: {len(status['zotero_chapters'])}")
     print(f"  Outline: {len(status['outline_chapters'])}")
@@ -31,7 +31,7 @@ def test_sync_check(sync_checker):
             print(f"  - {m['message']}")
 
     if status["recommendations"]:
-        print(f"\n💡 Recommendations:")
+        print("\n💡 Recommendations:")
         for rec in status["recommendations"][:3]:  # Show first 3
             print(f"  - {rec}")
 

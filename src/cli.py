@@ -161,9 +161,10 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 - `/diagnose` - Check paths, connections, and configuration
 - `/knowledge` - View indexed data and last update times
 - `/zotero-summary` - Show document counts by chapter and type
+- `/scrivener-summary` - Show indexed Scrivener documents per chapter
 - `/model` - Switch between model tiers (good/better/best)
 - `/history` - View past conversations
-- `/reindex` - Manually trigger re-indexing (close Zotero first!)
+- `/reindex [all|zotero|scrivener]` - Manually trigger re-indexing (close Zotero first!)
 - `/new` - Start fresh conversation
 - `/exit` - Exit the application
 
@@ -172,6 +173,8 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 - "Compare research density between chapters 5 and 9"
 - "What are the key sources for chapter 3?"
 - "Get all my Zotero annotations for chapter 9"
+- "Show me a Scrivener summary" (or use `/scrivener-summary`)
+- "How many Scrivener documents are indexed per chapter?"
         """
         self.console.print(Panel(Markdown(welcome), border_style="blue"))
 
@@ -263,14 +266,25 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         elif command_lower == "/knowledge":
             self.show_knowledge()
 
-        elif command_lower == "/reindex":
-            self.trigger_reindex()
+        elif command_lower.startswith("/reindex"):
+            # Parse optional source parameter
+            parts = command_lower.split()
+            source = parts[1] if len(parts) > 1 else "all"
+            if source not in ["all", "zotero", "scrivener"]:
+                self.console.print(
+                    "\n[yellow]Usage: /reindex [all|zotero|scrivener][/yellow]\n"
+                )
+            else:
+                self.trigger_reindex(source)
 
         elif command_lower == "/diagnose":
             self.show_diagnostics()
 
         elif command_lower == "/zotero-summary":
             self.show_zotero_summary()
+
+        elif command_lower == "/scrivener-summary":
+            self.show_scrivener_summary()
 
         else:
             self.console.print(f"\n[red]Unknown command: {command}[/red]")
@@ -285,6 +299,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         # Check environment variables
         self.console.print("[bold]Environment Variables:[/bold]")
         zotero_path = os.getenv("ZOTERO_PATH")
+        zotero_root_collection = os.getenv("ZOTERO_ROOT_COLLECTION")
         scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
         qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
 
@@ -302,6 +317,14 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                 )
 
         self.console.print(
+            f"\n  ZOTERO_ROOT_COLLECTION: {zotero_root_collection or '[dim]NOT SET (indexes all collections)[/dim]'}"
+        )
+        if zotero_root_collection:
+            self.console.print(
+                f"    [dim]Only indexing collections under '{zotero_root_collection}'[/dim]"
+            )
+
+        self.console.print(
             f"\n  SCRIVENER_PROJECT_PATH: {scrivener_path or '[red]NOT SET[/red]'}"
         )
         if scrivener_path:
@@ -310,13 +333,14 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                 f"    Exists: {'[green]YES[/green]' if exists else '[red]NO[/red]'}"
             )
             if exists:
-                scriv_file = (
-                    Path(scrivener_path) / f"{Path(scrivener_path).stem}.scrivx"
-                )
-                scriv_exists = scriv_file.exists()
-                self.console.print(
-                    f"    .scrivx file: {'[green]FOUND[/green]' if scriv_exists else '[red]NOT FOUND[/red]'}"
-                )
+                # Find .scrivx file dynamically (like ScrivenerParser does)
+                scrivx_files = list(Path(scrivener_path).glob("*.scrivx"))
+                if scrivx_files:
+                    self.console.print(
+                        f"    .scrivx file: [green]FOUND ({scrivx_files[0].name})[/green]"
+                    )
+                else:
+                    self.console.print("    .scrivx file: [red]NOT FOUND[/red]")
 
         self.console.print(f"\n  QDRANT_URL: {qdrant_url}")
 
@@ -404,7 +428,9 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 
         db_path = Path(zotero_path) / "zotero.sqlite"
         if not db_path.exists():
-            self.console.print(f"[red]✗ Zotero database not found at: {db_path}[/red]\n")
+            self.console.print(
+                f"[red]✗ Zotero database not found at: {db_path}[/red]\n"
+            )
             return
 
         try:
@@ -416,7 +442,11 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             with open(config_path) as f:
                 config = json.load(f)
 
-            chapter_pattern = config.get("project", {}).get("zotero", {}).get("chapter_pattern", r"^(\d+)\.")
+            chapter_pattern = (
+                config.get("project", {})
+                .get("zotero", {})
+                .get("chapter_pattern", r"^(\d+)\.")
+            )
             import re
 
             # Get all collections with their item counts and attachment types
@@ -476,7 +506,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                         str(pdf) if pdf > 0 else "-",
                         str(html) if html > 0 else "-",
                         str(txt) if txt > 0 else "-",
-                        str(other) if other > 0 else "-"
+                        str(other) if other > 0 else "-",
                     )
 
                     total_items += items
@@ -496,7 +526,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                 f"[bold green]{total_pdf}",
                 f"[bold blue]{total_html}",
                 f"[bold yellow]{total_txt}",
-                f"[bold dim]{total_other}"
+                f"[bold dim]{total_other}",
             )
 
             self.console.print(table)
@@ -505,23 +535,121 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         except sqlite3.OperationalError as e:
             if "locked" in str(e).lower():
                 self.console.print("[red]✗ Zotero database is locked[/red]")
-                self.console.print("[yellow]Please close Zotero and try again[/yellow]\n")
+                self.console.print(
+                    "[yellow]Please close Zotero and try again[/yellow]\n"
+                )
             else:
                 self.console.print(f"[red]✗ Database error: {e}[/red]\n")
         except Exception as e:
             self.console.print(f"[red]✗ Error: {e}[/red]\n")
             import traceback
+
             traceback.print_exc()
 
-    def trigger_reindex(self):
-        """Trigger manual re-indexing."""
+    def show_scrivener_summary(self):
+        """Show summary of indexed Scrivener documents by chapter."""
+        from rich.table import Table
+
+        self.console.print("\n[bold cyan]Scrivener Indexing Summary[/bold cyan]\n")
+
+        try:
+            # Get summary from RAG
+            summary = self.rag.get_scrivener_summary()
+
+            if summary.get("message"):
+                self.console.print(f"[yellow]{summary['message']}[/yellow]\n")
+                return
+
+            # Display overall statistics
+            stats_table = Table(show_header=False, box=None)
+            stats_table.add_row(
+                "[bold]Total Chapters:", f"{summary.get('total_chapters', 0)}"
+            )
+            stats_table.add_row(
+                "[bold]Total Documents:", f"{summary.get('total_documents', 0)}"
+            )
+            stats_table.add_row(
+                "[bold]Total Chunks:", f"{summary.get('total_chunks', 0)}"
+            )
+            stats_table.add_row(
+                "[bold]Total Words:", f"{summary.get('total_words', 0):,}"
+            )
+            self.console.print(stats_table)
+            self.console.print()
+
+            # Create per-chapter table
+            chapters = summary.get("chapters", [])
+            if chapters:
+                table = Table(show_header=True, header_style="bold cyan")
+                table.add_column("Ch", style="bold", width=4)
+                table.add_column("Title", style="dim")
+                table.add_column("Docs", justify="right")
+                table.add_column("Chunks", justify="right")
+                table.add_column("Words", justify="right", style="green")
+                table.add_column("Types", style="dim")
+
+                for ch in chapters:
+                    # Format document types
+                    doc_types = ch.get("doc_types", {})
+                    types_str = ", ".join(
+                        f"{dtype}:{count}" for dtype, count in doc_types.items()
+                    )
+
+                    table.add_row(
+                        str(ch["chapter_number"]),
+                        ch["chapter_title"][:40] + "..."
+                        if len(ch["chapter_title"]) > 40
+                        else ch["chapter_title"],
+                        str(ch["document_count"]),
+                        str(ch["total_chunks"]),
+                        f"{ch['total_words']:,}",
+                        types_str[:30] + "..." if len(types_str) > 30 else types_str,
+                    )
+
+                self.console.print(table)
+                self.console.print()
+
+            # Show unassigned documents if any
+            unassigned_count = summary.get("unassigned_count", 0)
+            if unassigned_count > 0:
+                self.console.print(
+                    f"[yellow]⚠ {unassigned_count} unassigned documents[/yellow]"
+                )
+                unassigned_docs = summary.get("unassigned_docs", [])
+                if unassigned_docs:
+                    self.console.print("[dim]Sample unassigned documents:[/dim]")
+                    for doc in unassigned_docs[:5]:
+                        self.console.print(
+                            f"  [dim]• {doc['doc_type']}: {doc['words']} words[/dim]"
+                        )
+                self.console.print()
+
+        except Exception as e:
+            self.console.print(f"[red]✗ Error: {e}[/red]\n")
+            import traceback
+
+            traceback.print_exc()
+
+    def trigger_reindex(self, source: str = "all"):
+        """Trigger manual re-indexing.
+
+        Args:
+            source: Which source to reindex - "all", "zotero", or "scrivener"
+        """
         import json
 
         from .indexer.scrivener_indexer import ScrivenerIndexer
         from .indexer.zotero_indexer import ZoteroIndexer
         from .vectordb.client import VectorDBClient
 
-        self.console.print("\n[bold cyan]Starting re-indexing...[/bold cyan]\n")
+        if source == "all":
+            self.console.print(
+                "\n[bold cyan]Starting re-indexing (all sources)...[/bold cyan]\n"
+            )
+        else:
+            self.console.print(
+                f"\n[bold cyan]Starting re-indexing ({source} only)...[/bold cyan]\n"
+            )
 
         try:
             # Load config
@@ -541,23 +669,26 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
             qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
 
-            if not zotero_path or not Path(zotero_path).exists():
-                self.console.print(
-                    "[red]✗ Zotero path not configured or doesn't exist[/red]"
-                )
-                self.console.print(
-                    "[yellow]Set ZOTERO_PATH in your .env file[/yellow]\n"
-                )
-                return
+            # Validate paths based on what we're indexing
+            if source in ["all", "zotero"]:
+                if not zotero_path or not Path(zotero_path).exists():
+                    self.console.print(
+                        "[red]✗ Zotero path not configured or doesn't exist[/red]"
+                    )
+                    self.console.print(
+                        "[yellow]Set ZOTERO_PATH in your .env file[/yellow]\n"
+                    )
+                    return
 
-            if not scrivener_path or not Path(scrivener_path).exists():
-                self.console.print(
-                    "[red]✗ Scrivener path not configured or doesn't exist[/red]"
-                )
-                self.console.print(
-                    "[yellow]Set SCRIVENER_PROJECT_PATH in your .env file[/yellow]\n"
-                )
-                return
+            if source in ["all", "scrivener"]:
+                if not scrivener_path or not Path(scrivener_path).exists():
+                    self.console.print(
+                        "[red]✗ Scrivener path not configured or doesn't exist[/red]"
+                    )
+                    self.console.print(
+                        "[yellow]Set SCRIVENER_PROJECT_PATH in your .env file[/yellow]\n"
+                    )
+                    return
 
             # Initialize vector DB client
             vectordb = VectorDBClient(
@@ -567,39 +698,41 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                 vector_size=config["embedding"]["vector_size"],
             )
 
-            # Index Zotero
-            self.console.print("[dim]Indexing Zotero library...[/dim]")
-            with Status(
-                "[bold cyan]Indexing Zotero...[/bold cyan]",
-                spinner="dots",
-                console=self.console,
-            ):
-                zotero_indexer = ZoteroIndexer(
-                    zotero_path=zotero_path, vectordb=vectordb, config=config
+            # Index Zotero (if requested)
+            if source in ["all", "zotero"]:
+                self.console.print("[dim]Indexing Zotero library...[/dim]")
+                with Status(
+                    "[bold cyan]Indexing Zotero...[/bold cyan]",
+                    spinner="dots",
+                    console=self.console,
+                ):
+                    zotero_indexer = ZoteroIndexer(
+                        zotero_path=zotero_path, vectordb=vectordb, config=config
+                    )
+                    zotero_stats = zotero_indexer.index_all()
+
+                self.console.print(
+                    f"[green]✓[/green] Indexed {zotero_stats.get('documents_indexed', 0)} Zotero documents "
+                    f"({zotero_stats.get('chunks_indexed', 0)} chunks)"
                 )
-                zotero_stats = zotero_indexer.index_all()
 
-            self.console.print(
-                f"[green]✓[/green] Indexed {zotero_stats.get('documents_indexed', 0)} Zotero documents "
-                f"({zotero_stats.get('chunks_indexed', 0)} chunks)"
-            )
+            # Index Scrivener (if requested)
+            if source in ["all", "scrivener"]:
+                self.console.print("[dim]Indexing Scrivener project...[/dim]")
+                with Status(
+                    "[bold cyan]Indexing Scrivener...[/bold cyan]",
+                    spinner="dots",
+                    console=self.console,
+                ):
+                    scrivener_indexer = ScrivenerIndexer(
+                        scrivener_path=scrivener_path, vectordb=vectordb, config=config
+                    )
+                    scrivener_stats = scrivener_indexer.index_all()
 
-            # Index Scrivener
-            self.console.print("[dim]Indexing Scrivener project...[/dim]")
-            with Status(
-                "[bold cyan]Indexing Scrivener...[/bold cyan]",
-                spinner="dots",
-                console=self.console,
-            ):
-                scrivener_indexer = ScrivenerIndexer(
-                    scrivener_path=scrivener_path, vectordb=vectordb, config=config
+                self.console.print(
+                    f"[green]✓[/green] Indexed {scrivener_stats.get('documents_indexed', 0)} Scrivener documents "
+                    f"({scrivener_stats.get('chunks_indexed', 0)} chunks)"
                 )
-                scrivener_stats = scrivener_indexer.index_all()
-
-            self.console.print(
-                f"[green]✓[/green] Indexed {scrivener_stats.get('documents_indexed', 0)} Scrivener documents "
-                f"({scrivener_stats.get('chunks_indexed', 0)} chunks)"
-            )
 
             self.console.print("\n[bold green]✓ Re-indexing complete![/bold green]\n")
 

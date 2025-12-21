@@ -44,28 +44,35 @@ def main():
         print(f"Collection: {coll_name} (ID: {coll_id})")
 
         # Count items in collection
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*)
             FROM collectionItems
             WHERE collectionID = ?
-        """, (coll_id,))
+        """,
+            (coll_id,),
+        )
         item_count = cursor.fetchone()[0]
         print(f"  Items: {item_count}")
 
         # Count items WITH attachments
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(DISTINCT i.itemID)
             FROM collectionItems ci
             JOIN items i ON ci.itemID = i.itemID
             JOIN itemAttachments ia ON i.itemID = ia.parentItemID
             WHERE ci.collectionID = ?
             AND ia.path IS NOT NULL
-        """, (coll_id,))
+        """,
+            (coll_id,),
+        )
         items_with_attachments = cursor.fetchone()[0]
         print(f"  Items with attachments: {items_with_attachments}")
 
         # Get sample attachment paths
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT i.itemID, iv.value as title, ia.path, ai.key, ia.contentType
             FROM collectionItems ci
             JOIN items i ON ci.itemID = i.itemID
@@ -76,11 +83,13 @@ def main():
             WHERE ci.collectionID = ?
             AND ia.path IS NOT NULL
             LIMIT 3
-        """, (coll_id,))
+        """,
+            (coll_id,),
+        )
 
         sample_attachments = cursor.fetchall()
         if sample_attachments:
-            print(f"  Sample attachments:")
+            print("  Sample attachments:")
             for item_id, title, path, key, content_type in sample_attachments:
                 # Resolve path
                 if path.startswith("storage:"):

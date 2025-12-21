@@ -15,10 +15,21 @@ class ScrivenerParser:
             scrivener_path: Path to .scriv project directory
         """
         self.scriv_path = Path(scrivener_path)
-        self.scrivx_file = self.scriv_path / f"{self.scriv_path.stem}.scrivx"
 
-        if not self.scrivx_file.exists():
-            raise FileNotFoundError(f"Scrivener project file not found: {self.scrivx_file}")
+        # Find the .scrivx file dynamically (there should only be one)
+        scrivx_files = list(self.scriv_path.glob("*.scrivx"))
+
+        if not scrivx_files:
+            raise FileNotFoundError(
+                f"No .scrivx file found in Scrivener project directory: {self.scriv_path}"
+            )
+
+        if len(scrivx_files) > 1:
+            raise ValueError(
+                f"Multiple .scrivx files found in {self.scriv_path}. Expected exactly one."
+            )
+
+        self.scrivx_file = scrivx_files[0]
 
     def get_chapter_structure(self) -> Dict:
         """Extract chapter structure from Scrivener project.
@@ -43,7 +54,9 @@ class ScrivenerParser:
             "chapters": self._flatten_chapters(structure),
         }
 
-    def _parse_binder_item(self, element, level: int = 0, chapter_counter: int = 0) -> List[Dict]:
+    def _parse_binder_item(
+        self, element, level: int = 0, chapter_counter: int = 0
+    ) -> List[Dict]:
         """Recursively parse binder items.
 
         Args:
@@ -84,7 +97,9 @@ class ScrivenerParser:
 
             # Recursively parse children
             if has_children:
-                item["children"] = self._parse_binder_item(children, level + 1, chapter_counter)
+                item["children"] = self._parse_binder_item(
+                    children, level + 1, chapter_counter
+                )
 
             items.append(item)
 

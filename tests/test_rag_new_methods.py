@@ -136,7 +136,7 @@ def test_source_diversity(rag, mock_vectordb):
             )
         )
 
-    mock_vectordb.scroll.return_value =(mixed_results, None)
+    mock_vectordb.scroll.return_value = (mixed_results, None)
 
     # Test diversity analysis
     results = rag.analyze_source_diversity(5)
@@ -173,7 +173,7 @@ def test_identify_key_sources(rag, mock_vectordb):
             )
         )
 
-    mock_vectordb.scroll.return_value =(repeated_sources, None)
+    mock_vectordb.scroll.return_value = (repeated_sources, None)
 
     # Test key source identification
     results = rag.identify_key_sources(9, min_mentions=3)
@@ -195,7 +195,7 @@ def test_export_summary(rag, mock_vectordb):
 
     # Mock the required data
     mock_results = create_mock_search_results(5, count=10)
-    mock_vectordb.scroll.return_value =(mock_results, None)
+    mock_vectordb.scroll.return_value = (mock_results, None)
 
     # Test markdown format
     markdown_summary = rag.export_chapter_summary(5, format="markdown")
@@ -286,7 +286,7 @@ def test_research_timeline(rag, mock_vectordb):
                 )
             )
 
-    mock_vectordb.scroll.return_value =(timeline_results, None)
+    mock_vectordb.scroll.return_value = (timeline_results, None)
 
     # Test timeline without chapter filter
     results = rag.get_research_timeline()
@@ -382,7 +382,7 @@ def test_error_handling(rag, mock_vectordb):
     print("\n🧪 Testing Error Handling\n")
 
     # Test with empty/None inputs where applicable
-    mock_vectordb.scroll.return_value =([], None)
+    mock_vectordb.scroll.return_value = ([], None)
 
     # Test compare_chapters with valid inputs but no data
     result = rag.compare_chapters(1, 2)
@@ -394,8 +394,12 @@ def test_error_handling(rag, mock_vectordb):
 
     # Test export_chapter_summary with invalid format (should default to markdown)
     with patch.object(rag, "get_chapter_info", return_value={"indexed_chunks": 0}):
-        with patch.object(rag, "analyze_source_diversity", return_value={"diversity_score": 0}):
-            with patch.object(rag, "identify_key_sources", return_value={"key_sources": []}):
+        with patch.object(
+            rag, "analyze_source_diversity", return_value={"diversity_score": 0}
+        ):
+            with patch.object(
+                rag, "identify_key_sources", return_value={"key_sources": []}
+            ):
                 result = rag.export_chapter_summary(5, format="invalid")
                 # Should default to markdown
                 assert isinstance(result, str)

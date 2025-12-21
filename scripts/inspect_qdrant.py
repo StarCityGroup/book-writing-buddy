@@ -3,7 +3,7 @@
 
 import json
 import os
-from collections import Counter, defaultdict
+from collections import Counter
 
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
@@ -30,7 +30,7 @@ def inspect_qdrant():
         return
 
     # Sample MORE data to get accurate picture
-    print(f"\nSampling 500 points...")
+    print("\nSampling 500 points...")
     try:
         sample, _ = client.scroll(
             collection_name=collection_name, limit=500, with_payload=True
@@ -67,21 +67,25 @@ def inspect_qdrant():
             if doc_type:
                 doc_types[doc_type] += 1
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("METADATA ANALYSIS (sample of 500 points)")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
-        print(f"\n📊 Source Types:")
+        print("\n📊 Source Types:")
         for source_type, count in source_types.most_common():
             pct = (count / len(sample)) * 100
             print(f"  {source_type}: {count} ({pct:.1f}%)")
 
-        print(f"\n📚 Chapter Metadata:")
-        print(f"  Points WITH chapter_number: {has_chapter} ({(has_chapter/len(sample)*100):.1f}%)")
-        print(f"  Points WITHOUT chapter_number: {no_chapter} ({(no_chapter/len(sample)*100):.1f}%)")
+        print("\n📚 Chapter Metadata:")
+        print(
+            f"  Points WITH chapter_number: {has_chapter} ({(has_chapter / len(sample) * 100):.1f}%)"
+        )
+        print(
+            f"  Points WITHOUT chapter_number: {no_chapter} ({(no_chapter / len(sample) * 100):.1f}%)"
+        )
 
         if chapter_numbers:
-            print(f"\n📖 Chapter Numbers Found:")
+            print("\n📖 Chapter Numbers Found:")
             for chapter_num in sorted(chapter_numbers.keys()):
                 count = chapter_numbers[chapter_num]
                 print(f"  Chapter {chapter_num}: {count} chunks")
@@ -89,18 +93,18 @@ def inspect_qdrant():
             print("\n  ⚠️  NO CHAPTER NUMBERS FOUND IN SAMPLE")
 
         if doc_types:
-            print(f"\n📝 Document Types (Scrivener):")
+            print("\n📝 Document Types (Scrivener):")
             for doc_type, count in doc_types.most_common():
                 print(f"  {doc_type}: {count}")
 
-        print(f"\n🏷️  All Metadata Fields Present:")
+        print("\n🏷️  All Metadata Fields Present:")
         for field in sorted(metadata_fields):
             print(f"  - {field}")
 
         # Sample a few actual payloads to see structure
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("SAMPLE PAYLOADS (first 3)")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         for i, point in enumerate(sample[:3], 1):
             print(f"\n--- Point {i} ---")
             payload = point.payload.copy()
@@ -111,9 +115,9 @@ def inspect_qdrant():
             print(json.dumps(payload, indent=2, default=str))
 
         # Get ALL unique chapter numbers from entire collection (not just sample)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("QUERYING ALL CHAPTER NUMBERS IN COLLECTION")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Scroll through ALL points to get complete chapter list
         offset = None
@@ -142,7 +146,7 @@ def inspect_qdrant():
 
         print(f"\nScanned {batch_count * 100} points across entire collection")
         if all_chapters:
-            print(f"\n✓ All unique chapter numbers in database:")
+            print("\n✓ All unique chapter numbers in database:")
             print(f"  {sorted(all_chapters)}")
             print(f"\n  Total chapters with data: {len(all_chapters)}")
         else:

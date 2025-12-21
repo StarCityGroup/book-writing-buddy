@@ -41,7 +41,7 @@ def test_scrivener_parser():
         structure = parser.get_chapter_structure()
 
         print(f"✅ Parsed {len(structure['chapters'])} chapters")
-        print(f"\n📚 Sample chapters:")
+        print("\n📚 Sample chapters:")
         for ch in structure["chapters"][:3]:
             print(f"  Chapter {ch['number']}: {ch['title']}")
 
@@ -74,12 +74,12 @@ def test_context_loading():
             x in context for x in ["Book Outline", "FIREWALL", "Climate", "Adaptation"]
         )
 
-        print(f"\n📊 Context Sources:")
+        print("\n📊 Context Sources:")
         print(f"  Scrivener: {'✅' if has_scrivener else '❌'}")
         print(f"  Outline: {'✅' if has_outline else '❌'}")
 
         # Show preview
-        print(f"\n📋 Preview (first 500 chars):")
+        print("\n📋 Preview (first 500 chars):")
         print("-" * 60)
         print(context[:500])
         print("-" * 60)
@@ -105,8 +105,8 @@ def test_sync_checker():
         checker = SyncChecker()
         status = checker.check_sync_status()
 
-        print(f"✅ Sync check completed")
-        print(f"\n📊 Results:")
+        print("✅ Sync check completed")
+        print("\n📊 Results:")
         print(f"  Status: {'✅ In Sync' if status['in_sync'] else '⚠️  Out of Sync'}")
         print(f"  Scrivener chapters: {len(status['scrivener_chapters'])}")
         print(f"  Zotero chapters: {len(status['zotero_chapters'])}")
@@ -114,7 +114,7 @@ def test_sync_checker():
         print(f"  Mismatches: {len(status['mismatches'])}")
 
         if status["mismatches"]:
-            print(f"\n⚠️  Mismatches found:")
+            print("\n⚠️  Mismatches found:")
             for m in status["mismatches"][:3]:
                 print(f"  - {m['message']}")
 

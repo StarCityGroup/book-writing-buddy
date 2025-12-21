@@ -156,9 +156,7 @@ def inspect_zotero():
                                     full_path = Path(path)
 
                                 exists = full_path.exists() if full_path else False
-                                size = (
-                                    full_path.stat().st_size if exists else 0
-                                )
+                                size = full_path.stat().st_size if exists else 0
                                 size_mb = size / (1024 * 1024)
 
                                 print(f"      [{att_id}] {content_type}")

@@ -39,6 +39,7 @@ def create_agent():
     workflow.add_node("bibliography", nodes.bibliography_node)
     workflow.add_node("timeline", nodes.timeline_node)
     workflow.add_node("related_research", nodes.related_research_node)
+    workflow.add_node("scrivener_summary", nodes.scrivener_summary_node)
 
     # Define routing logic
     def route_from_planning(state: AgentState) -> str:
@@ -77,6 +78,8 @@ def create_agent():
             return "timeline"
         elif phase == "related_research":
             return "related_research"
+        elif phase == "scrivener_summary":
+            return "scrivener_summary"
         else:
             return END
 

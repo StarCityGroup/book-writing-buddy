@@ -50,7 +50,10 @@ class ZoteroIndexer:
         )
 
         # Get project-specific config
-        self.root_collection = (
+        # Root collection from environment variable or config
+        import os
+
+        self.root_collection = os.getenv("ZOTERO_ROOT_COLLECTION") or (
             config.get("project", {}).get("zotero", {}).get("root_collection")
         )
         self.chapter_pattern = (
@@ -66,7 +69,7 @@ class ZoteroIndexer:
         self.fact_extractor = FactExtractor()
 
     def get_collections(self) -> List[Dict[str, Any]]:
-        """Get all collections with chapter numbers"""
+        """Get all collections with chapter numbers, optionally filtered by root collection"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -77,7 +80,7 @@ class ZoteroIndexer:
         """
 
         cursor.execute(query)
-        collections = []
+        all_collections = []
 
         for coll_id, name, parent_id in cursor.fetchall():
             # Skip excluded collections
@@ -87,7 +90,7 @@ class ZoteroIndexer:
             # Extract chapter number if matches pattern
             chapter_num = self._extract_chapter_number(name)
 
-            collections.append(
+            all_collections.append(
                 {
                     "id": coll_id,
                     "name": name,
@@ -97,7 +100,64 @@ class ZoteroIndexer:
             )
 
         conn.close()
-        return collections
+
+        # If root collection is specified, filter to only descendants
+        if self.root_collection:
+            # Find root collection by name
+            root_coll = next(
+                (c for c in all_collections if c["name"] == self.root_collection), None
+            )
+
+            if root_coll:
+                # Get all descendant collections
+                descendant_ids = self._get_descendant_collection_ids(
+                    root_coll["id"], all_collections
+                )
+                # Include root collection itself
+                descendant_ids.add(root_coll["id"])
+
+                # Filter to only descendants
+                collections = [c for c in all_collections if c["id"] in descendant_ids]
+
+                logger.info(
+                    f"Filtering to root collection '{self.root_collection}': "
+                    f"{len(collections)} collections (from {len(all_collections)} total)"
+                )
+
+                return collections
+            else:
+                logger.warning(
+                    f"Root collection '{self.root_collection}' not found. "
+                    f"Indexing all collections."
+                )
+
+        return all_collections
+
+    def _get_descendant_collection_ids(
+        self, parent_id: int, all_collections: List[Dict[str, Any]]
+    ) -> set:
+        """Recursively get all descendant collection IDs.
+
+        Args:
+            parent_id: Parent collection ID
+            all_collections: List of all collections
+
+        Returns:
+            Set of descendant collection IDs
+        """
+        descendants = set()
+
+        # Find direct children
+        children = [c for c in all_collections if c["parent_id"] == parent_id]
+
+        for child in children:
+            descendants.add(child["id"])
+            # Recursively get descendants of this child
+            descendants.update(
+                self._get_descendant_collection_ids(child["id"], all_collections)
+            )
+
+        return descendants
 
     def get_collection_items(self, collection_id: int) -> List[Dict[str, Any]]:
         """Get all items in a collection"""
@@ -118,7 +178,14 @@ class ZoteroIndexer:
         cursor.execute(query, (collection_id,))
         items = []
 
-        for item_id, key, title, attachment_path, attachment_id, attachment_key in cursor.fetchall():
+        for (
+            item_id,
+            key,
+            title,
+            attachment_path,
+            attachment_id,
+            attachment_key,
+        ) in cursor.fetchall():
             items.append(
                 {
                     "id": item_id,
@@ -163,19 +230,41 @@ class ZoteroIndexer:
         Index all collections.
 
         Returns:
-            Dict with stats (collections_indexed, chunks_indexed)
+            Dict with stats (collections_indexed, documents_indexed, chunks_indexed)
         """
         collections = self.get_collections()
-        stats = {"collections_indexed": 0, "chunks_indexed": 0}
+        stats = {"collections_indexed": 0, "documents_indexed": 0, "chunks_indexed": 0}
+
+        # Log indexing scope
+        if self.root_collection:
+            logger.info(
+                f"Indexing Zotero collections under root '{self.root_collection}'"
+            )
+        else:
+            logger.info("Indexing all Zotero collections")
 
         for collection in collections:
             if collection["chapter_number"] is not None:
+                logger.info(
+                    f"Indexing collection: {collection['name']} "
+                    f"(Chapter {collection['chapter_number']})"
+                )
                 chunks = self.index_collection(collection["id"])
-                stats["collections_indexed"] += 1
-                stats["chunks_indexed"] += chunks
+                if chunks > 0:
+                    stats["collections_indexed"] += 1
+                    stats["chunks_indexed"] += chunks
+
+        # Count documents
+        stats["documents_indexed"] = stats["collections_indexed"]
+
+        logger.info(
+            f"Zotero indexing complete: {stats['collections_indexed']} collections, "
+            f"{stats['chunks_indexed']} chunks"
+        )
 
         # Update index timestamp
         from datetime import datetime
+
         timestamp = datetime.now().isoformat()
         self.vectordb.set_index_timestamp("zotero", timestamp)
 

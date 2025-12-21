@@ -26,14 +26,17 @@ Project-specific details are configured in `data/project.json` (copy from `data/
 
 ### Zotero Collections
 - **Structure**: Nested hierarchy under a root collection
-  - Root collection name configured in `data/project.json`
+  - Root collection name configured in `.env` as `ZOTERO_ROOT_COLLECTION` (optional)
+  - If set, only indexes collections under that root collection
+  - If not set, indexes all collections
   - Special collections: General Reference (cross-chapter context), __incoming (unsorted)
   - Chapter collections organized by parts
 - **Pattern**: Chapters typically numbered with format `{number}. {title}`
-- **Location**: Local Zotero database (path set in `.env`)
+- **Location**: Local Zotero database (path set in `.env` as `ZOTERO_PATH`)
 - **Access**: Via Docker indexer (must close Zotero before running)
 - **Content**: Research sources, clippings, annotations, notes
 - **General Reference**: Cross-chapter context materials
+- **Scoping**: Set `ZOTERO_ROOT_COLLECTION=<collection_name>` in `.env` to limit indexing to a specific collection tree
 
 ### Scrivener Project
 - **Location**: Configured in `.env` as `SCRIVENER_PROJECT_PATH`
@@ -182,45 +185,9 @@ Core dependencies (install with `uv sync`):
 - Qdrant vector database (runs in Docker)
 - Zotero desktop application (for database access)
 
-## Claude Code Skills
+## Research Tools
 
-This project uses Claude Code skills (not MCP servers) for research analysis. Skills are located in `.claude/skills/`:
-
-### Available Skills
-
-1. **search-research** - Semantic search through indexed materials
-   - Query Zotero and Scrivener content
-   - Filter by chapter or source type
-   - Returns relevant chunks with similarity scores
-
-2. **get-annotations** - Retrieve Zotero annotations
-   - Get all highlights, notes, and comments for a chapter
-   - Organized by source document
-   - Includes annotation types and colors
-
-3. **analyze-gaps** - Identify research gaps
-   - Analyze source density and coverage
-   - Compare chapters to find weak areas
-   - Get recommendations for additional research
-
-4. **find-similar** - Detect similar or duplicate content
-   - Check for redundancy across sources
-   - Verify draft text against sources (plagiarism check)
-   - Configurable similarity threshold
-
-5. **get-chapter-info** - Comprehensive chapter overview
-   - Zotero collection details and source counts
-   - Scrivener structure and word counts
-   - Research density assessment
-
-### Using Skills
-
-Skills are automatically available in Claude Code. Example usage:
-```
-"Search for early DEC firewall implementations in chapter 2"
-"Get all annotations for chapter 9"
-"Analyze research gaps across the manuscript"
-```
+**Important**: This project does NOT use Claude Code skills. All research functionality is provided through custom tools in the TUI agent.
 
 ## TUI Agent Capabilities
 
@@ -247,6 +214,8 @@ The interactive TUI agent (`uv run main.py`) provides natural language access to
 **Structure & Organization:**
 - "List all my chapters"
 - "Check if my chapters are in sync"
+- "Show me a Scrivener summary"
+- "How many Scrivener documents are indexed per chapter?"
 
 ### Advanced Analysis Features (NEW)
 
@@ -307,6 +276,19 @@ Get AI-powered suggestions for relevant research from other chapters:
 - "Find cross-references for chapter 12"
 
 Uses semantic similarity to discover connections you might have missed.
+
+**Scrivener Indexing Summary:**
+Get detailed breakdown of indexed Scrivener documents per chapter:
+- "Show me a Scrivener summary"
+- "How many Scrivener documents are indexed?"
+- "What's the Scrivener breakdown per chapter?"
+- "Show indexed Scrivener documents by chapter"
+
+Provides comprehensive statistics including:
+- Total documents, chunks, and word counts
+- Per-chapter breakdown with document types (draft, note, synopsis)
+- Identification of unassigned documents
+- Helps verify that your Scrivener project is properly indexed
 
 ### How Agent Routing Works
 

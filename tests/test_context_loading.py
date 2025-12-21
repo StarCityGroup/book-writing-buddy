@@ -55,7 +55,9 @@ def test_context_with_missing_files():
         context = load_book_context()
 
         # Should still work, just with fallback messages
-        assert "outline file found" in context.lower() or "no outline" in context.lower()
+        assert (
+            "outline file found" in context.lower() or "no outline" in context.lower()
+        )
         print("✅ Handles missing outline.txt gracefully")
 
     finally:

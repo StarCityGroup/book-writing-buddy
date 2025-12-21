@@ -29,6 +29,7 @@ services:
     environment:
       - QDRANT_URL=http://qdrant:6333
       - ZOTERO_PATH=/mnt/zotero
+      - ZOTERO_ROOT_COLLECTION=${ZOTERO_ROOT_COLLECTION:-}
       - SCRIVENER_PATH=/mnt/scrivener
 
     restart: unless-stopped

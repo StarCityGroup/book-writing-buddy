@@ -1174,6 +1174,91 @@ class BookRAG:
     # Smart Recommendations
     # ========================================================================
 
+    def get_scrivener_summary(self) -> Dict[str, Any]:
+        """Get detailed breakdown of indexed Scrivener documents per chapter.
+
+        Returns:
+            Dict with Scrivener indexing statistics per chapter
+        """
+        # Get all Scrivener results
+        results = self.search(
+            query="scrivener content",
+            filters={"source_type": "scrivener"},
+            limit=10000,
+            score_threshold=0.0,
+        )
+
+        if not results:
+            return {
+                "total_documents": 0,
+                "total_chunks": 0,
+                "total_words": 0,
+                "chapters": {},
+                "message": "No Scrivener documents have been indexed yet",
+            }
+
+        # Group by chapter
+        chapters = {}
+        unassigned_docs = []
+        total_words = 0
+
+        for result in results:
+            meta = result["metadata"]
+            chapter_num = meta.get("chapter_number")
+            doc_type = meta.get("doc_type", "unknown")
+            word_count = len(result["text"].split())
+            total_words += word_count
+
+            if chapter_num:
+                if chapter_num not in chapters:
+                    chapters[chapter_num] = {
+                        "chapter_number": chapter_num,
+                        "chapter_title": meta.get("chapter_title", "Unknown"),
+                        "total_chunks": 0,
+                        "total_words": 0,
+                        "doc_types": {},
+                        "documents": set(),
+                    }
+
+                chapters[chapter_num]["total_chunks"] += 1
+                chapters[chapter_num]["total_words"] += word_count
+
+                # Count doc types
+                if doc_type not in chapters[chapter_num]["doc_types"]:
+                    chapters[chapter_num]["doc_types"][doc_type] = 0
+                chapters[chapter_num]["doc_types"][doc_type] += 1
+
+                # Track unique document IDs
+                doc_id = meta.get("scrivener_id")
+                if doc_id:
+                    chapters[chapter_num]["documents"].add(doc_id)
+            else:
+                # Track unassigned documents
+                unassigned_docs.append(
+                    {
+                        "file_path": meta.get("file_path", "Unknown"),
+                        "doc_type": doc_type,
+                        "words": word_count,
+                    }
+                )
+
+        # Convert documents sets to counts
+        chapter_list = []
+        for ch in sorted(chapters.values(), key=lambda x: x["chapter_number"]):
+            ch["document_count"] = len(ch["documents"])
+            del ch["documents"]  # Remove the set, just keep the count
+            chapter_list.append(ch)
+
+        return {
+            "total_chapters": len(chapter_list),
+            "total_chunks": len(results),
+            "total_words": total_words,
+            "total_documents": sum(ch["document_count"] for ch in chapter_list),
+            "chapters": chapter_list,
+            "unassigned_count": len(unassigned_docs),
+            "unassigned_docs": unassigned_docs[:20],  # Limit to first 20
+        }
+
     def suggest_related_research(self, chapter: int, limit: int = 5) -> Dict[str, Any]:
         """Suggest research from other chapters that might be relevant.
 

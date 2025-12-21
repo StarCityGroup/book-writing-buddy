@@ -195,6 +195,7 @@ Classify the following user query into ONE of these categories:
 - check_sync: Queries about whether outline, Zotero, and Scrivener are aligned
 - list_chapters: Asking to list all chapters or show chapter structure
 - chapter_info: Requesting detailed info about a specific chapter
+- scrivener_summary: Asking for breakdown of indexed Scrivener documents per chapter
 - cross_chapter_theme: Tracking a theme or concept across multiple chapters
 - compare_chapters: Comparing research density or content between chapters
 - source_diversity: Analyzing variety of source types in a chapter
@@ -223,6 +224,7 @@ Respond with ONLY the category name, nothing else."""
                 "check_sync",
                 "list_chapters",
                 "chapter_info",
+                "scrivener_summary",
                 "cross_chapter_theme",
                 "compare_chapters",
                 "source_diversity",
@@ -273,6 +275,20 @@ Respond with ONLY the category name, nothing else."""
             ]
         ):
             return "list_chapters"
+
+        # Scrivener summary queries
+        if any(
+            phrase in query
+            for phrase in [
+                "scrivener summary",
+                "scrivener breakdown",
+                "indexed scrivener",
+                "scrivener documents",
+                "scrivener per chapter",
+                "how many scrivener",
+            ]
+        ):
+            return "scrivener_summary"
 
         # Chapter info queries
         if any(
@@ -526,6 +542,11 @@ Respond with ONLY the category name, nothing else."""
             context = self._format_chapters_list(state["chapters_list"])
             context_parts.append(f"## Chapters\n{context}")
 
+        # Scrivener summary
+        if state.get("scrivener_summary"):
+            context = self._format_scrivener_summary(state["scrivener_summary"])
+            context_parts.append(f"## Scrivener Indexing Summary\n{context}")
+
         # Cross-chapter theme
         if state.get("cross_chapter_theme"):
             context = self._format_cross_chapter_theme(state["cross_chapter_theme"])
@@ -712,6 +733,19 @@ Build upon your previous analysis while incorporating the new direction."""
 
         return {"chapters_list": chapters_info, "current_phase": "analyzing"}
 
+    def scrivener_summary_node(self, state: AgentState) -> Dict:
+        """Get detailed breakdown of indexed Scrivener documents per chapter.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Updated state with Scrivener indexing summary
+        """
+        summary = self.rag.get_scrivener_summary()
+
+        return {"scrivener_summary": summary, "current_phase": "analyzing"}
+
     def _extract_chapter_number(self, text: str) -> int:
         """Extract a single chapter number from text."""
         import re
@@ -885,6 +919,50 @@ Build upon your previous analysis while incorporating the new direction."""
 
         if len(chapters) > 10:
             formatted.append(f"... and {len(chapters) - 10} more chapters")
+
+        return "\n".join(formatted)
+
+    def _format_scrivener_summary(self, summary: Dict) -> str:
+        """Format Scrivener indexing summary for LLM context."""
+        if summary.get("message"):
+            return summary["message"]
+
+        formatted = [
+            f"Total chapters: {summary.get('total_chapters', 0)}",
+            f"Total documents indexed: {summary.get('total_documents', 0)}",
+            f"Total chunks: {summary.get('total_chunks', 0)}",
+            f"Total words: {summary.get('total_words', 0):,}\n",
+        ]
+
+        chapters = summary.get("chapters", [])
+        if chapters:
+            formatted.append("**Per-Chapter Breakdown:**\n")
+            for ch in chapters:
+                formatted.append(
+                    f"**Chapter {ch['chapter_number']}: {ch['chapter_title']}**"
+                )
+                formatted.append(f"  - Documents: {ch['document_count']}")
+                formatted.append(f"  - Chunks: {ch['total_chunks']}")
+                formatted.append(f"  - Words: {ch['total_words']:,}")
+
+                doc_types = ch.get("doc_types", {})
+                if doc_types:
+                    formatted.append("  - Document types:")
+                    for doc_type, count in doc_types.items():
+                        formatted.append(f"    - {doc_type}: {count}")
+                formatted.append("")
+
+        unassigned_count = summary.get("unassigned_count", 0)
+        if unassigned_count > 0:
+            formatted.append(f"\n**Unassigned documents:** {unassigned_count}")
+            unassigned_docs = summary.get("unassigned_docs", [])
+            if unassigned_docs:
+                formatted.append("Sample unassigned documents:")
+                for doc in unassigned_docs[:5]:
+                    formatted.append(
+                        f"  - {doc['doc_type']}: {doc['words']} words "
+                        f"({doc['file_path']})"
+                    )
 
         return "\n".join(formatted)
 
