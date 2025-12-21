@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 import structlog
 from striprtf.striprtf import rtf_to_text
 
+from ..scrivener_parser import ScrivenerParser
 from ..vectordb.client import VectorDBClient
 from .chunking import ScrivenerChunker
 
@@ -55,6 +56,46 @@ class ScrivenerIndexer:
             .get("research_folder", "Research")
         )
 
+        # Parse Scrivener structure to get accurate chapter mapping
+        self.uuid_to_chapter = {}
+        try:
+            parser = ScrivenerParser(str(scrivener_path))
+            structure = parser.get_chapter_structure()
+            self._build_uuid_mapping(structure.get("structure", []))
+            logger.info(
+                f"Loaded Scrivener structure: {len(self.uuid_to_chapter)} documents mapped"
+            )
+        except Exception as e:
+            logger.warning(f"Could not parse Scrivener structure: {e}")
+            logger.warning("Will fall back to guessing chapter numbers from content")
+
+    def _build_uuid_mapping(self, items, parent_info=None):
+        """Recursively build UUID to chapter metadata mapping.
+
+        Args:
+            items: List of binder items from ScrivenerParser
+            parent_info: Parent chapter info (for nested documents)
+        """
+        for item in items:
+            uuid = item.get("uuid")
+            chapter_num = item.get("chapter_number")
+            title = item.get("title", "Untitled")
+
+            if uuid:
+                # Store metadata for this UUID
+                self.uuid_to_chapter[uuid] = {
+                    "chapter_number": chapter_num,
+                    "chapter_title": title,
+                    "parent": parent_info.get("chapter_title") if parent_info else None,
+                    "is_folder": item.get("is_folder", False),
+                }
+
+                # Recurse into children, passing chapter info down
+                if "children" in item:
+                    # Use this item's chapter info as parent for children
+                    current_info = self.uuid_to_chapter[uuid]
+                    self._build_uuid_mapping(item["children"], parent_info=current_info)
+
     def index_all(self) -> Dict[str, int]:
         """
         Index entire Scrivener project.
@@ -85,6 +126,7 @@ class ScrivenerIndexer:
 
         # Update index timestamp
         from datetime import datetime
+
         timestamp = datetime.now().isoformat()
         self.vectordb.set_index_timestamp("scrivener", timestamp)
 
@@ -121,18 +163,30 @@ class ScrivenerIndexer:
             # Determine document type
             doc_type = self._determine_doc_type(rtf_path, text)
 
+            # Extract UUID from filename (Scrivener uses UUIDs)
+            scrivener_uuid = rtf_path.stem
+
             # Build metadata
             metadata = {
                 "source_type": "scrivener",
                 "file_path": str(rtf_path),
                 "doc_type": doc_type,
-                "scrivener_id": rtf_path.stem,  # Document ID
+                "scrivener_id": scrivener_uuid,
             }
 
-            # Try to extract chapter number from path or content
-            chapter_num = self._extract_chapter_number(rtf_path, text)
-            if chapter_num:
-                metadata["chapter_number"] = chapter_num
+            # Get chapter info from UUID mapping (preferred) or fall back to guessing
+            if scrivener_uuid in self.uuid_to_chapter:
+                chapter_info = self.uuid_to_chapter[scrivener_uuid]
+                if chapter_info.get("chapter_number"):
+                    metadata["chapter_number"] = chapter_info["chapter_number"]
+                    metadata["chapter_title"] = chapter_info.get("chapter_title", "")
+                if chapter_info.get("parent"):
+                    metadata["parent_title"] = chapter_info["parent"]
+            else:
+                # Fallback: try to extract chapter number from path or content
+                chapter_num = self._extract_chapter_number(rtf_path, text)
+                if chapter_num:
+                    metadata["chapter_number"] = chapter_num
 
             # Chunk document
             chunks = self.chunker.chunk_scrivener_doc(

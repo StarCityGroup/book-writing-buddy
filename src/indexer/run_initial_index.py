@@ -51,21 +51,21 @@ def main():
         qdrant_url=qdrant_url,
         collection_name=config["vectordb"]["collection_name"],
         embedding_model=config["embedding"]["model"],
-        vector_size=config["embedding"]["vector_size"]
+        vector_size=config["embedding"]["vector_size"],
     )
 
     # Check if already indexed
     info = vectordb.get_collection_info()
     if info["points_count"] > 0:
-        logger.info(f"Collection already has {info['points_count']} points, skipping initial index")
+        logger.info(
+            f"Collection already has {info['points_count']} points, skipping initial index"
+        )
         return
 
     # Index Zotero
     logger.info("Indexing Zotero library...")
     zotero_indexer = ZoteroIndexer(
-        zotero_path=zotero_path,
-        vectordb=vectordb,
-        config=config
+        zotero_path=zotero_path, vectordb=vectordb, config=config
     )
 
     try:
@@ -77,9 +77,7 @@ def main():
     # Index Scrivener
     logger.info("Indexing Scrivener project...")
     scrivener_indexer = ScrivenerIndexer(
-        scrivener_path=scrivener_path,
-        vectordb=vectordb,
-        config=config
+        scrivener_path=scrivener_path, vectordb=vectordb, config=config
     )
 
     try:

@@ -2,6 +2,7 @@
 
 import json
 import os
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -91,6 +92,10 @@ class BookResearchChatCLI:
 
         try:
             self.rag = BookRAG()
+
+            # Backfill timestamps if needed (for data indexed before timestamp feature)
+            self.rag.vectordb.backfill_timestamps_if_needed()
+
             stats = self.rag.get_index_stats()
 
             if stats["points_count"] > 0:
@@ -128,22 +133,45 @@ class BookResearchChatCLI:
 
 Welcome! I'm your AI research assistant for analyzing your Zotero research library and Scrivener manuscript.
 
-I can help you:
+## What I Can Do
+
+**Basic Research:**
 - **Search semantically** across all your research materials
 - **Get annotations** from your Zotero library for specific chapters
 - **Analyze research gaps** to identify where you need more sources
 - **Find similar content** to check for redundancy or verify originality
 
-Available commands:
+**Advanced Analysis:**
+- **Track themes** across multiple chapters (e.g., "Where does 'resilience' appear?")
+- **Compare chapters** to see which need more research
+- **Analyze source diversity** to ensure balanced coverage
+- **Identify key sources** that you cite most frequently
+- **Export summaries** and generate bibliographies (APA/MLA/Chicago)
+- **View research timeline** to see when materials were added
+- **Get smart suggestions** for relevant research from other chapters
+
+**Project Management:**
+- **List all chapters** from your Scrivener project
+- **Check sync status** between outline, Zotero, and Scrivener
+- **Get chapter info** with detailed statistics
+
+## Commands
+
 - `/help` - Show this help message
+- `/diagnose` - Check paths, connections, and configuration
 - `/knowledge` - View indexed data and last update times
+- `/zotero-summary` - Show document counts by chapter and type
 - `/model` - Switch between model tiers (good/better/best)
 - `/history` - View past conversations
-- `/reindex` - Manually trigger re-indexing
+- `/reindex` - Manually trigger re-indexing (close Zotero first!)
 - `/new` - Start fresh conversation
 - `/exit` - Exit the application
 
-**Just ask a question to get started!**
+**Just ask a question to get started!** Examples:
+- "Track the theme 'infrastructure failure' across all chapters"
+- "Compare research density between chapters 5 and 9"
+- "What are the key sources for chapter 3?"
+- "Get all my Zotero annotations for chapter 9"
         """
         self.console.print(Panel(Markdown(welcome), border_style="blue"))
 
@@ -211,9 +239,13 @@ Available commands:
                 if current_tier != "custom":
                     self.console.print(f"[cyan]Tier: {current_tier}[/cyan]")
                 self.console.print("\nAvailable tiers:")
-                self.console.print(f"  - good   ({model_map['good']}) - Fast & economical")
+                self.console.print(
+                    f"  - good   ({model_map['good']}) - Fast & economical"
+                )
                 self.console.print(f"  - better ({model_map['better']}) - Balanced")
-                self.console.print(f"  - best   ({model_map['best']}) - Highest quality")
+                self.console.print(
+                    f"  - best   ({model_map['best']}) - Highest quality"
+                )
                 self.console.print("\nUsage: /model <good|better|best>\n")
             else:
                 tier = parts[1].lower()
@@ -234,11 +266,108 @@ Available commands:
         elif command_lower == "/reindex":
             self.trigger_reindex()
 
+        elif command_lower == "/diagnose":
+            self.show_diagnostics()
+
+        elif command_lower == "/zotero-summary":
+            self.show_zotero_summary()
+
         else:
             self.console.print(f"\n[red]Unknown command: {command}[/red]")
             self.console.print("Type /help for available commands.\n")
 
         return False
+
+    def show_diagnostics(self):
+        """Show diagnostic information about paths and configuration."""
+        self.console.print("\n[bold cyan]System Diagnostics[/bold cyan]\n")
+
+        # Check environment variables
+        self.console.print("[bold]Environment Variables:[/bold]")
+        zotero_path = os.getenv("ZOTERO_PATH")
+        scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
+        qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+
+        self.console.print(f"  ZOTERO_PATH: {zotero_path or '[red]NOT SET[/red]'}")
+        if zotero_path:
+            exists = Path(zotero_path).exists()
+            self.console.print(
+                f"    Exists: {'[green]YES[/green]' if exists else '[red]NO[/red]'}"
+            )
+            if exists:
+                db_path = Path(zotero_path) / "zotero.sqlite"
+                db_exists = db_path.exists()
+                self.console.print(
+                    f"    Database: {'[green]FOUND[/green]' if db_exists else '[red]NOT FOUND[/red]'}"
+                )
+
+        self.console.print(
+            f"\n  SCRIVENER_PROJECT_PATH: {scrivener_path or '[red]NOT SET[/red]'}"
+        )
+        if scrivener_path:
+            exists = Path(scrivener_path).exists()
+            self.console.print(
+                f"    Exists: {'[green]YES[/green]' if exists else '[red]NO[/red]'}"
+            )
+            if exists:
+                scriv_file = (
+                    Path(scrivener_path) / f"{Path(scrivener_path).stem}.scrivx"
+                )
+                scriv_exists = scriv_file.exists()
+                self.console.print(
+                    f"    .scrivx file: {'[green]FOUND[/green]' if scriv_exists else '[red]NOT FOUND[/red]'}"
+                )
+
+        self.console.print(f"\n  QDRANT_URL: {qdrant_url}")
+
+        # Test Qdrant connection
+        self.console.print("\n[bold]Qdrant Connection:[/bold]")
+        if self.rag:
+            try:
+                info = self.rag.vectordb.get_collection_info()
+                self.console.print("  Status: [green]CONNECTED[/green]")
+                self.console.print(f"  Points: {info['points_count']:,}")
+            except Exception as e:
+                self.console.print(f"  Status: [red]FAILED[/red] - {e}")
+        else:
+            self.console.print("  [yellow]RAG not initialized[/yellow]")
+
+        # Check indexed data sample
+        if self.rag:
+            self.console.print("\n[bold]Indexed Data Sample:[/bold]")
+            try:
+                # Get a sample of data to see what's indexed
+                sample = self.rag.vectordb.client.scroll(
+                    collection_name=self.rag.vectordb.collection_name,
+                    limit=10,
+                    with_payload=True,
+                )
+
+                source_types = {}
+                chapter_numbers = set()
+
+                for point in sample[0]:
+                    source_type = point.payload.get("source_type", "unknown")
+                    source_types[source_type] = source_types.get(source_type, 0) + 1
+
+                    chapter_num = point.payload.get("chapter_number")
+                    if chapter_num:
+                        chapter_numbers.add(chapter_num)
+
+                self.console.print(f"  Source types: {dict(source_types)}")
+                if chapter_numbers:
+                    self.console.print(
+                        f"  Chapter numbers found: {sorted(chapter_numbers)}"
+                    )
+                else:
+                    self.console.print(
+                        "  [yellow]No chapter numbers in sample[/yellow]"
+                    )
+
+            except Exception as e:
+                self.console.print(f"  [red]Error sampling data: {e}[/red]")
+
+        self.console.print()
 
     def show_knowledge(self):
         """Show summary of indexed data."""
@@ -253,9 +382,7 @@ Available commands:
 
             last_indexed = stats["last_indexed"]
             self.console.print("\n[bold]Last Indexed:[/bold]")
-            self.console.print(
-                f"  - Zotero: {last_indexed.get('zotero', 'never')}"
-            )
+            self.console.print(f"  - Zotero: {last_indexed.get('zotero', 'never')}")
             self.console.print(
                 f"  - Scrivener: {last_indexed.get('scrivener', 'never')}"
             )
@@ -264,12 +391,236 @@ Available commands:
 
         self.console.print()
 
+    def show_zotero_summary(self):
+        """Show summary of Zotero documents by chapter and type."""
+        from rich.table import Table
+
+        self.console.print("\n[bold cyan]Zotero Library Summary[/bold cyan]\n")
+
+        zotero_path = os.getenv("ZOTERO_PATH")
+        if not zotero_path:
+            self.console.print("[red]✗ ZOTERO_PATH not set in .env[/red]\n")
+            return
+
+        db_path = Path(zotero_path) / "zotero.sqlite"
+        if not db_path.exists():
+            self.console.print(f"[red]✗ Zotero database not found at: {db_path}[/red]\n")
+            return
+
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
+            # Load config to get chapter pattern
+            config_path = Path(__file__).parent.parent / "config" / "default.json"
+            with open(config_path) as f:
+                config = json.load(f)
+
+            chapter_pattern = config.get("project", {}).get("zotero", {}).get("chapter_pattern", r"^(\d+)\.")
+            import re
+
+            # Get all collections with their item counts and attachment types
+            cursor.execute("""
+                SELECT
+                    c.collectionID,
+                    c.collectionName,
+                    COUNT(DISTINCT i.itemID) as total_items,
+                    COUNT(DISTINCT CASE WHEN ia.path LIKE '%.pdf' THEN ia.itemID END) as pdf_count,
+                    COUNT(DISTINCT CASE WHEN ia.path LIKE '%.html' OR ia.path LIKE '%.htm' THEN ia.itemID END) as html_count,
+                    COUNT(DISTINCT CASE WHEN ia.path LIKE '%.txt' THEN ia.itemID END) as txt_count,
+                    COUNT(DISTINCT CASE WHEN ia.path IS NOT NULL
+                        AND ia.path NOT LIKE '%.pdf'
+                        AND ia.path NOT LIKE '%.html'
+                        AND ia.path NOT LIKE '%.htm'
+                        AND ia.path NOT LIKE '%.txt'
+                        THEN ia.itemID END) as other_count
+                FROM collections c
+                LEFT JOIN collectionItems ci ON c.collectionID = ci.collectionID
+                LEFT JOIN items i ON ci.itemID = i.itemID
+                LEFT JOIN itemAttachments ia ON i.itemID = ia.parentItemID
+                GROUP BY c.collectionID, c.collectionName
+                ORDER BY c.collectionName
+            """)
+
+            results = cursor.fetchall()
+            conn.close()
+
+            # Create table
+            table = Table(show_header=True, header_style="bold cyan")
+            table.add_column("Chapter", style="bold")
+            table.add_column("Collection", style="dim")
+            table.add_column("Items", justify="right")
+            table.add_column("PDFs", justify="right", style="green")
+            table.add_column("HTML", justify="right", style="blue")
+            table.add_column("TXT", justify="right", style="yellow")
+            table.add_column("Other", justify="right", style="dim")
+
+            total_items = 0
+            total_pdf = 0
+            total_html = 0
+            total_txt = 0
+            total_other = 0
+            chapter_count = 0
+
+            for coll_id, coll_name, items, pdf, html, txt, other in results:
+                # Extract chapter number if matches pattern
+                match = re.match(chapter_pattern, coll_name)
+                chapter_num = match.group(1) if match else "-"
+
+                # Only show collections with items
+                if items > 0:
+                    table.add_row(
+                        chapter_num,
+                        coll_name[:50] + "..." if len(coll_name) > 50 else coll_name,
+                        str(items),
+                        str(pdf) if pdf > 0 else "-",
+                        str(html) if html > 0 else "-",
+                        str(txt) if txt > 0 else "-",
+                        str(other) if other > 0 else "-"
+                    )
+
+                    total_items += items
+                    total_pdf += pdf
+                    total_html += html
+                    total_txt += txt
+                    total_other += other
+                    if match:
+                        chapter_count += 1
+
+            # Add totals row
+            table.add_section()
+            table.add_row(
+                "[bold]TOTAL",
+                f"[bold]{chapter_count} chapters",
+                f"[bold]{total_items}",
+                f"[bold green]{total_pdf}",
+                f"[bold blue]{total_html}",
+                f"[bold yellow]{total_txt}",
+                f"[bold dim]{total_other}"
+            )
+
+            self.console.print(table)
+            self.console.print()
+
+        except sqlite3.OperationalError as e:
+            if "locked" in str(e).lower():
+                self.console.print("[red]✗ Zotero database is locked[/red]")
+                self.console.print("[yellow]Please close Zotero and try again[/yellow]\n")
+            else:
+                self.console.print(f"[red]✗ Database error: {e}[/red]\n")
+        except Exception as e:
+            self.console.print(f"[red]✗ Error: {e}[/red]\n")
+            import traceback
+            traceback.print_exc()
+
     def trigger_reindex(self):
         """Trigger manual re-indexing."""
-        self.console.print("\n[yellow]Manual re-indexing not yet implemented.[/yellow]")
-        self.console.print(
-            "Use the Docker watcher or run indexer scripts directly.\n"
-        )
+        import json
+
+        from .indexer.scrivener_indexer import ScrivenerIndexer
+        from .indexer.zotero_indexer import ZoteroIndexer
+        from .vectordb.client import VectorDBClient
+
+        self.console.print("\n[bold cyan]Starting re-indexing...[/bold cyan]\n")
+
+        try:
+            # Load config
+            config_path = Path(__file__).parent.parent / "config" / "default.json"
+            with open(config_path) as f:
+                config = json.load(f)
+
+            # Try to load local config
+            local_config_path = Path(__file__).parent.parent / "config.local.json"
+            if local_config_path.exists():
+                with open(local_config_path) as f:
+                    local_config = json.load(f)
+                    config.update(local_config)
+
+            # Get paths from environment
+            zotero_path = os.getenv("ZOTERO_PATH")
+            scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
+            qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+
+            if not zotero_path or not Path(zotero_path).exists():
+                self.console.print(
+                    "[red]✗ Zotero path not configured or doesn't exist[/red]"
+                )
+                self.console.print(
+                    "[yellow]Set ZOTERO_PATH in your .env file[/yellow]\n"
+                )
+                return
+
+            if not scrivener_path or not Path(scrivener_path).exists():
+                self.console.print(
+                    "[red]✗ Scrivener path not configured or doesn't exist[/red]"
+                )
+                self.console.print(
+                    "[yellow]Set SCRIVENER_PROJECT_PATH in your .env file[/yellow]\n"
+                )
+                return
+
+            # Initialize vector DB client
+            vectordb = VectorDBClient(
+                qdrant_url=qdrant_url,
+                collection_name=config["vectordb"]["collection_name"],
+                embedding_model=config["embedding"]["model"],
+                vector_size=config["embedding"]["vector_size"],
+            )
+
+            # Index Zotero
+            self.console.print("[dim]Indexing Zotero library...[/dim]")
+            with Status(
+                "[bold cyan]Indexing Zotero...[/bold cyan]",
+                spinner="dots",
+                console=self.console,
+            ):
+                zotero_indexer = ZoteroIndexer(
+                    zotero_path=zotero_path, vectordb=vectordb, config=config
+                )
+                zotero_stats = zotero_indexer.index_all()
+
+            self.console.print(
+                f"[green]✓[/green] Indexed {zotero_stats.get('documents_indexed', 0)} Zotero documents "
+                f"({zotero_stats.get('chunks_indexed', 0)} chunks)"
+            )
+
+            # Index Scrivener
+            self.console.print("[dim]Indexing Scrivener project...[/dim]")
+            with Status(
+                "[bold cyan]Indexing Scrivener...[/bold cyan]",
+                spinner="dots",
+                console=self.console,
+            ):
+                scrivener_indexer = ScrivenerIndexer(
+                    scrivener_path=scrivener_path, vectordb=vectordb, config=config
+                )
+                scrivener_stats = scrivener_indexer.index_all()
+
+            self.console.print(
+                f"[green]✓[/green] Indexed {scrivener_stats.get('documents_indexed', 0)} Scrivener documents "
+                f"({scrivener_stats.get('chunks_indexed', 0)} chunks)"
+            )
+
+            self.console.print("\n[bold green]✓ Re-indexing complete![/bold green]\n")
+
+            # Refresh RAG instance
+            self.rag = BookRAG()
+
+        except FileNotFoundError as e:
+            self.console.print(f"\n[red]✗ Configuration file not found: {e}[/red]\n")
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e).lower():
+                self.console.print("\n[red]✗ Zotero database is locked[/red]")
+                self.console.print(
+                    "[yellow]Please close Zotero and try again[/yellow]\n"
+                )
+            else:
+                self.console.print(f"\n[red]✗ Database error: {e}[/red]\n")
+        except Exception as e:
+            self.console.print(f"\n[red]✗ Re-indexing failed: {e}[/red]\n")
+            import traceback
+
+            traceback.print_exc()
 
     def show_history(self):
         """Show past conversations."""
@@ -331,7 +682,7 @@ Available commands:
 
             # Print only NEW agent responses
             all_messages = result.get("messages", [])
-            new_messages = all_messages[messages_before + 1:]
+            new_messages = all_messages[messages_before + 1 :]
 
             if not new_messages:
                 self.console.print(

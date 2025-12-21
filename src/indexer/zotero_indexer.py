@@ -105,25 +105,27 @@ class ZoteroIndexer:
         cursor = conn.cursor()
 
         query = """
-            SELECT i.itemID, i.key, iv.value as title, ia.path
+            SELECT i.itemID, i.key, iv.value as title, ia.path, ia.itemID as attachment_id, ai.key as attachment_key
             FROM collectionItems ci
             JOIN items i ON ci.itemID = i.itemID
             LEFT JOIN itemData id ON i.itemID = id.itemID AND id.fieldID = 1
             LEFT JOIN itemDataValues iv ON id.valueID = iv.valueID
-            LEFT JOIN itemAttachments ia ON i.itemID = ia.itemID
+            LEFT JOIN itemAttachments ia ON i.itemID = ia.parentItemID
+            LEFT JOIN items ai ON ia.itemID = ai.itemID
             WHERE ci.collectionID = ?
         """
 
         cursor.execute(query, (collection_id,))
         items = []
 
-        for item_id, key, title, attachment_path in cursor.fetchall():
+        for item_id, key, title, attachment_path, attachment_id, attachment_key in cursor.fetchall():
             items.append(
                 {
                     "id": item_id,
                     "key": key,
                     "title": title or "Untitled",
                     "attachment_path": attachment_path,
+                    "attachment_key": attachment_key,  # Key of the attachment item, not parent
                 }
             )
 
@@ -197,8 +199,10 @@ class ZoteroIndexer:
 
         # Extract text based on attachment type
         if item["attachment_path"]:
+            # Use attachment's key (not parent item's key) to resolve storage path
+            key_for_path = item.get("attachment_key") or item["key"]
             attachment_path = self._resolve_attachment_path(
-                item["attachment_path"], item["key"]
+                item["attachment_path"], key_for_path
             )
 
             if attachment_path and attachment_path.exists():
@@ -208,6 +212,10 @@ class ZoteroIndexer:
                     return self._index_html(attachment_path, metadata)
                 elif attachment_path.suffix.lower() == ".txt":
                     return self._index_text(attachment_path, metadata)
+            else:
+                logger.warning(
+                    f"Attachment not found: {attachment_path} (item: {item['title']})"
+                )
 
         return 0
 

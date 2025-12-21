@@ -117,37 +117,113 @@ class BookRAG:
 
         try:
             conn = sqlite3.connect(self.zotero_db)
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            # Query for annotations (highlights, notes)
-            # This is a simplified query - real implementation would be more complex
-            query = """
-                SELECT
-                    items.itemID,
-                    itemDataValues.value as content,
-                    items.key
-                FROM items
-                JOIN itemData ON items.itemID = itemData.itemID
-                JOIN itemDataValues ON itemData.valueID = itemDataValues.valueID
-                WHERE items.itemTypeID IN (13, 14)  # Note and attachment types
-                LIMIT 100
-            """
+            # Build query with optional chapter filter
+            if chapter:
+                # Filter by collection matching chapter number
+                query = """
+                    SELECT DISTINCT
+                        ia.annotationType,
+                        ia.annotationText,
+                        ia.annotationComment,
+                        ia.annotationColor,
+                        parent.itemID as parentItemID,
+                        COALESCE(parentData.value, 'Unknown') as parentTitle,
+                        coll.collectionName
+                    FROM itemAnnotations ia
+                    JOIN items annot ON ia.itemID = annot.itemID
+                    JOIN items parent ON ia.parentItemID = parent.itemID
+                    LEFT JOIN itemData parentData ON parent.itemID = parentData.itemID
+                        AND parentData.fieldID = (SELECT fieldID FROM fields WHERE fieldName = 'title')
+                    LEFT JOIN itemDataValues ON parentData.valueID = itemDataValues.valueID
+                    LEFT JOIN collectionItems ci ON parent.itemID = ci.itemID
+                    LEFT JOIN collections coll ON ci.collectionID = coll.collectionID
+                    WHERE coll.collectionName LIKE ?
+                    ORDER BY parent.itemID, annot.dateAdded
+                """
+                # Match collections like "1. Chapter Title" or "Chapter 1"
+                cursor.execute(query, (f"%{chapter}%",))
+            else:
+                # Get all annotations
+                query = """
+                    SELECT DISTINCT
+                        ia.annotationType,
+                        ia.annotationText,
+                        ia.annotationComment,
+                        ia.annotationColor,
+                        parent.itemID as parentItemID,
+                        COALESCE(parentData.value, 'Unknown') as parentTitle,
+                        COALESCE(coll.collectionName, 'No Collection') as collectionName
+                    FROM itemAnnotations ia
+                    JOIN items annot ON ia.itemID = annot.itemID
+                    JOIN items parent ON ia.parentItemID = parent.itemID
+                    LEFT JOIN itemData parentData ON parent.itemID = parentData.itemID
+                        AND parentData.fieldID = (SELECT fieldID FROM fields WHERE fieldName = 'title')
+                    LEFT JOIN itemDataValues ON parentData.valueID = itemDataValues.valueID
+                    LEFT JOIN collectionItems ci ON parent.itemID = ci.itemID
+                    LEFT JOIN collections coll ON ci.collectionID = coll.collectionID
+                    ORDER BY parent.itemID, annot.dateAdded
+                    LIMIT 500
+                """
+                cursor.execute(query)
 
-            cursor.execute(query)
             rows = cursor.fetchall()
             conn.close()
 
-            annotations = {
+            # Organize annotations by source document
+            annotations_by_source = {}
+            for row in rows:
+                parent_id = row["parentItemID"]
+                parent_title = row["parentTitle"]
+
+                if parent_id not in annotations_by_source:
+                    annotations_by_source[parent_id] = {
+                        "title": parent_title,
+                        "collection": row["collectionName"],
+                        "annotations": [],
+                    }
+
+                # Add annotation
+                annotation = {
+                    "type": row["annotationType"],
+                    "text": row["annotationText"] or "",
+                    "comment": row["annotationComment"] or "",
+                    "color": row["annotationColor"] or "",
+                }
+
+                annotations_by_source[parent_id]["annotations"].append(annotation)
+
+            # Convert to list format
+            annotations_list = []
+            for source_id, source_data in annotations_by_source.items():
+                annotations_list.append(
+                    {
+                        "source_id": source_id,
+                        "title": source_data["title"],
+                        "collection": source_data["collection"],
+                        "annotation_count": len(source_data["annotations"]),
+                        "annotations": source_data["annotations"],
+                    }
+                )
+
+            return {
                 "chapter": chapter,
-                "count": len(rows),
-                "items": [
-                    {"id": row[0], "content": row[1][:200], "key": row[2]}
-                    for row in rows
-                ],
+                "source_count": len(annotations_list),
+                "total_annotations": sum(
+                    s["annotation_count"] for s in annotations_list
+                ),
+                "sources": annotations_list,
             }
 
-            return annotations
-
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e).lower():
+                return {
+                    "error": "Zotero database is locked. Please close Zotero and try again."
+                }
+            logger.error(f"Error querying Zotero annotations: {e}")
+            return {"error": str(e)}
         except Exception as e:
             logger.error(f"Error querying Zotero annotations: {e}")
             return {"error": str(e)}
@@ -803,10 +879,8 @@ class BookRAG:
         lines.append("## Key Sources")
         key_srcs = key_sources.get("key_sources", [])
         if key_srcs:
-            threshold = key_sources.get('threshold', 3)
-            lines.append(
-                f"Found {len(key_srcs)} sources with {threshold}+ mentions:"
-            )
+            threshold = key_sources.get("threshold", 3)
+            lines.append(f"Found {len(key_srcs)} sources with {threshold}+ mentions:")
             for src in key_srcs[:10]:  # Top 10
                 lines.append(
                     f"- **{src['title']}** ({src['item_type']}): "

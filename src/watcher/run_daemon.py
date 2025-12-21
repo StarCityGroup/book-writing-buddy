@@ -48,27 +48,23 @@ def main():
         qdrant_url=qdrant_url,
         collection_name=config["vectordb"]["collection_name"],
         embedding_model=config["embedding"]["model"],
-        vector_size=config["embedding"]["vector_size"]
+        vector_size=config["embedding"]["vector_size"],
     )
 
     # Initialize indexers
     zotero_indexer = ZoteroIndexer(
-        zotero_path=zotero_path,
-        vectordb=vectordb,
-        config=config
+        zotero_path=zotero_path, vectordb=vectordb, config=config
     )
 
     scrivener_indexer = ScrivenerIndexer(
-        scrivener_path=scrivener_path,
-        vectordb=vectordb,
-        config=config
+        scrivener_path=scrivener_path, vectordb=vectordb, config=config
     )
 
     # Create and start watcher
     watcher = FileWatcherDaemon(
         zotero_indexer=zotero_indexer,
         scrivener_indexer=scrivener_indexer,
-        config=config
+        config=config,
     )
 
     watcher.start()

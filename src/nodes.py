@@ -4,11 +4,14 @@ import os
 from pathlib import Path
 from typing import Dict, List
 
+import structlog
 from langchain_openai import ChatOpenAI
 from openai import APIConnectionError
 
 from .rag import BookRAG
 from .state import AgentState
+
+logger = structlog.get_logger()
 
 
 def load_book_context() -> str:
@@ -160,19 +163,94 @@ Type `/exit` to quit and fix the configuration."""
         if messages:
             last_msg = messages[-1]
             if get_msg_role(last_msg) in ["user", "human"]:
-                user_msg = get_msg_content(last_msg).lower()
                 research_query = get_msg_content(last_msg)
 
-                # Classify query type
-                query_type = self._classify_query(user_msg)
+                # Classify query type using LLM
+                try:
+                    query_type = self._classify_query_with_llm(research_query)
+                except Exception as e:
+                    logger.warning(
+                        f"LLM classification failed: {e}, falling back to heuristics"
+                    )
+                    query_type = self._classify_query_heuristic(research_query.lower())
 
                 updates["research_query"] = research_query
                 updates["current_phase"] = query_type
 
         return updates
 
-    def _classify_query(self, query: str) -> str:
-        """Classify the type of research query.
+    def _classify_query_with_llm(self, query: str) -> str:
+        """Classify query type using LLM for robust natural language understanding.
+
+        Args:
+            query: User's query text
+
+        Returns:
+            Query type: 'search', 'annotations', 'gap_analysis', etc.
+        """
+        classification_prompt = f"""You are a query classifier for a book research assistant.
+Classify the following user query into ONE of these categories:
+
+**Categories:**
+- check_sync: Queries about whether outline, Zotero, and Scrivener are aligned
+- list_chapters: Asking to list all chapters or show chapter structure
+- chapter_info: Requesting detailed info about a specific chapter
+- cross_chapter_theme: Tracking a theme or concept across multiple chapters
+- compare_chapters: Comparing research density or content between chapters
+- source_diversity: Analyzing variety of source types in a chapter
+- key_sources: Identifying most-cited sources in a chapter
+- export_summary: Exporting or generating a research summary/brief
+- bibliography: Generating citations or bibliography
+- timeline: Asking about when research was added or indexed
+- related_research: Suggesting relevant research from other chapters
+- annotations: Getting Zotero highlights, notes, or annotations
+- gap_analysis: Identifying weak areas or missing research
+- similarity: Finding similar or duplicate content
+- search: General semantic search through research (DEFAULT)
+
+**User Query:** "{query}"
+
+Respond with ONLY the category name, nothing else."""
+
+        try:
+            response = self.llm.invoke(
+                [{"role": "user", "content": classification_prompt}]
+            )
+            classification = response.content.strip().lower()
+
+            # Validate classification
+            valid_types = {
+                "check_sync",
+                "list_chapters",
+                "chapter_info",
+                "cross_chapter_theme",
+                "compare_chapters",
+                "source_diversity",
+                "key_sources",
+                "export_summary",
+                "bibliography",
+                "timeline",
+                "related_research",
+                "annotations",
+                "gap_analysis",
+                "similarity",
+                "search",
+            }
+
+            if classification in valid_types:
+                return classification
+            else:
+                logger.warning(
+                    f"LLM returned invalid classification: {classification}, defaulting to search"
+                )
+                return "search"
+
+        except Exception as e:
+            logger.error(f"LLM classification error: {e}")
+            raise
+
+    def _classify_query_heuristic(self, query: str) -> str:
+        """Classify query type using heuristic string matching (fallback).
 
         Args:
             query: User's query text (lowercase)
@@ -673,14 +751,31 @@ Build upon your previous analysis while incorporating the new direction."""
         if annotations.get("error"):
             return f"Error retrieving annotations: {annotations['error']}"
 
-        count = annotations.get("count", 0)
-        if count == 0:
+        source_count = annotations.get("source_count", 0)
+        total_annotations = annotations.get("total_annotations", 0)
+
+        if total_annotations == 0:
             return "No annotations found."
 
-        items = annotations.get("items", [])[:20]  # Limit to 20
-        formatted = [f"Found {count} annotations\n"]
-        for item in items:
-            formatted.append(f"- {item['content']}")
+        formatted = [
+            f"Found {total_annotations} annotations from {source_count} sources\n"
+        ]
+
+        sources = annotations.get("sources", [])[:10]  # Limit to 10 sources
+        for source in sources:
+            formatted.append(
+                f"\n**{source['title']}** ({source['collection']})"
+                f" - {source['annotation_count']} annotations:"
+            )
+            for annot in source["annotations"][:5]:  # Show first 5 per source
+                annot_type = annot["type"]
+                text = annot["text"][:200] if annot["text"] else ""
+                comment = annot["comment"][:200] if annot["comment"] else ""
+
+                if text:
+                    formatted.append(f"  - [{annot_type}] {text}")
+                if comment:
+                    formatted.append(f"    Note: {comment}")
 
         return "\n".join(formatted)
 
