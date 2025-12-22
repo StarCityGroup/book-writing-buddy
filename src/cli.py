@@ -158,10 +158,8 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 ## Commands
 
 - `/help` - Show this help message
-- `/diagnose` - Check paths, connections, and configuration
-- `/knowledge` - View indexed data and last update times
-- `/zotero-summary` - Show document counts by chapter and type
-- `/scrivener-summary` - Show indexed Scrivener documents per chapter
+- `/settings` - Check paths, connections, and configuration
+- `/knowledge` - View indexed data, summaries, and last update times
 - `/model` - Switch between model tiers (good/better/best)
 - `/history` - View past conversations
 - `/reindex [all|zotero|scrivener]` - Manually trigger re-indexing (close Zotero first!)
@@ -173,8 +171,6 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 - "Compare research density between chapters 5 and 9"
 - "What are the key sources for chapter 3?"
 - "Get all my Zotero annotations for chapter 9"
-- "Show me a Scrivener summary" (or use `/scrivener-summary`)
-- "How many Scrivener documents are indexed per chapter?"
         """
         self.console.print(Panel(Markdown(welcome), border_style="blue"))
 
@@ -277,14 +273,8 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             else:
                 self.trigger_reindex(source)
 
-        elif command_lower == "/diagnose":
+        elif command_lower == "/settings":
             self.show_diagnostics()
-
-        elif command_lower == "/zotero-summary":
-            self.show_zotero_summary()
-
-        elif command_lower == "/scrivener-summary":
-            self.show_scrivener_summary()
 
         else:
             self.console.print(f"\n[red]Unknown command: {command}[/red]")
@@ -394,10 +384,11 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         self.console.print()
 
     def show_knowledge(self):
-        """Show summary of indexed data."""
+        """Show comprehensive knowledge base summary including Zotero and Scrivener details."""
         self.console.print("\n[bold cyan]Knowledge Base Summary[/bold cyan]\n")
 
         if self.rag:
+            # Overall stats
             stats = self.rag.get_index_stats()
             self.console.print(
                 f"[bold]Indexed Data:[/bold] {stats['points_count']:,} chunks"
@@ -410,16 +401,29 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             self.console.print(
                 f"  - Scrivener: {last_indexed.get('scrivener', 'never')}"
             )
+
+            # Zotero summary
+            self.console.print("\n[bold cyan]═══ Zotero Library ═══[/bold cyan]")
+            self.show_zotero_summary(header=False)
+
+            # Scrivener summary
+            self.console.print("\n[bold cyan]═══ Scrivener Project ═══[/bold cyan]")
+            self.show_scrivener_summary(header=False)
         else:
             self.console.print("[yellow]RAG system not initialized[/yellow]")
 
         self.console.print()
 
-    def show_zotero_summary(self):
-        """Show summary of Zotero documents by chapter and type."""
+    def show_zotero_summary(self, header: bool = True):
+        """Show summary of Zotero documents by chapter and type.
+
+        Args:
+            header: Whether to print the section header (default: True)
+        """
         from rich.table import Table
 
-        self.console.print("\n[bold cyan]Zotero Library Summary[/bold cyan]\n")
+        if header:
+            self.console.print("\n[bold cyan]Zotero Library Summary[/bold cyan]\n")
 
         zotero_path = os.getenv("ZOTERO_PATH")
         if not zotero_path:
@@ -546,11 +550,16 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 
             traceback.print_exc()
 
-    def show_scrivener_summary(self):
-        """Show summary of indexed Scrivener documents by chapter."""
+    def show_scrivener_summary(self, header: bool = True):
+        """Show summary of indexed Scrivener documents by chapter.
+
+        Args:
+            header: Whether to print the section header (default: True)
+        """
         from rich.table import Table
 
-        self.console.print("\n[bold cyan]Scrivener Indexing Summary[/bold cyan]\n")
+        if header:
+            self.console.print("\n[bold cyan]Scrivener Indexing Summary[/bold cyan]\n")
 
         try:
             # Get summary from RAG
