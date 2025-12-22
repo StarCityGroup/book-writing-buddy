@@ -415,32 +415,27 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         self.console.print()
 
     def show_zotero_summary(self, header: bool = True):
-        """Show summary of Zotero documents by chapter and type.
+        """Show summary of indexed Zotero documents by chapter and type.
+
+        Queries the Qdrant index to show what's actually indexed, not the raw
+        Zotero database.
 
         Args:
             header: Whether to print the section header (default: True)
         """
+        import re
+        from collections import defaultdict
+
         from rich.table import Table
 
         if header:
             self.console.print("\n[bold cyan]Zotero Library Summary[/bold cyan]\n")
 
-        zotero_path = os.getenv("ZOTERO_PATH")
-        if not zotero_path:
-            self.console.print("[red]✗ ZOTERO_PATH not set in .env[/red]\n")
-            return
-
-        db_path = Path(zotero_path) / "zotero.sqlite"
-        if not db_path.exists():
-            self.console.print(
-                f"[red]✗ Zotero database not found at: {db_path}[/red]\n"
-            )
+        if not self.rag:
+            self.console.print("[yellow]RAG system not initialized[/yellow]\n")
             return
 
         try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-
             # Load config to get chapter pattern
             config_path = Path(__file__).parent.parent / "config" / "default.json"
             with open(config_path) as f:
@@ -451,75 +446,114 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                 .get("zotero", {})
                 .get("chapter_pattern", r"^(\d+)\.")
             )
-            import re
 
-            # Get all collections with their item counts and attachment types
-            cursor.execute("""
-                SELECT
-                    c.collectionID,
-                    c.collectionName,
-                    COUNT(DISTINCT i.itemID) as total_items,
-                    COUNT(DISTINCT CASE WHEN ia.path LIKE '%.pdf' THEN ia.itemID END) as pdf_count,
-                    COUNT(DISTINCT CASE WHEN ia.path LIKE '%.html' OR ia.path LIKE '%.htm' THEN ia.itemID END) as html_count,
-                    COUNT(DISTINCT CASE WHEN ia.path LIKE '%.txt' THEN ia.itemID END) as txt_count,
-                    COUNT(DISTINCT CASE WHEN ia.path IS NOT NULL
-                        AND ia.path NOT LIKE '%.pdf'
-                        AND ia.path NOT LIKE '%.html'
-                        AND ia.path NOT LIKE '%.htm'
-                        AND ia.path NOT LIKE '%.txt'
-                        THEN ia.itemID END) as other_count
-                FROM collections c
-                LEFT JOIN collectionItems ci ON c.collectionID = ci.collectionID
-                LEFT JOIN items i ON ci.itemID = i.itemID
-                LEFT JOIN itemAttachments ia ON i.itemID = ia.parentItemID
-                GROUP BY c.collectionID, c.collectionName
-                ORDER BY c.collectionName
-            """)
+            # Query Qdrant for all Zotero chunks
+            from qdrant_client.models import FieldCondition, Filter, MatchValue
 
-            results = cursor.fetchall()
-            conn.close()
+            scroll_filter = Filter(
+                must=[
+                    FieldCondition(key="source_type", match=MatchValue(value="zotero"))
+                ]
+            )
+
+            # Scroll through all Zotero points
+            all_points = []
+            offset = None
+            while True:
+                results, offset = self.rag.vectordb.client.scroll(
+                    collection_name=self.rag.vectordb.collection_name,
+                    scroll_filter=scroll_filter,
+                    limit=1000,
+                    offset=offset,
+                    with_payload=True,
+                )
+                all_points.extend(results)
+                if offset is None:
+                    break
+
+            if not all_points:
+                self.console.print("[yellow]No Zotero documents indexed yet.[/yellow]")
+                self.console.print(
+                    "[dim]Run /reindex zotero to index your Zotero library.[/dim]\n"
+                )
+                return
+
+            # Aggregate by collection
+            collection_stats = defaultdict(
+                lambda: {
+                    "chunks": 0,
+                    "items": set(),
+                    "pdf": 0,
+                    "html": 0,
+                    "txt": 0,
+                    "other": 0,
+                }
+            )
+
+            for point in all_points:
+                payload = point.payload
+                coll_name = payload.get("collection_name", "Unknown")
+                item_id = payload.get("item_id")
+                file_type = payload.get("file_type", "")
+
+                stats = collection_stats[coll_name]
+                stats["chunks"] += 1
+                if item_id:
+                    stats["items"].add(item_id)
+
+                # Count by file type
+                if file_type == "pdf":
+                    stats["pdf"] += 1
+                elif file_type == "html":
+                    stats["html"] += 1
+                elif file_type == "text":
+                    stats["txt"] += 1
+                elif file_type:
+                    stats["other"] += 1
 
             # Create table
             table = Table(show_header=True, header_style="bold cyan")
-            table.add_column("Chapter", style="bold")
+            table.add_column("Chapter", style="bold", width=7)
             table.add_column("Collection", style="dim")
             table.add_column("Items", justify="right")
+            table.add_column("Chunks", justify="right", style="cyan")
             table.add_column("PDFs", justify="right", style="green")
             table.add_column("HTML", justify="right", style="blue")
             table.add_column("TXT", justify="right", style="yellow")
-            table.add_column("Other", justify="right", style="dim")
 
             total_items = 0
+            total_chunks = 0
             total_pdf = 0
             total_html = 0
             total_txt = 0
-            total_other = 0
             chapter_count = 0
 
-            for coll_id, coll_name, items, pdf, html, txt, other in results:
+            # Sort collections by name
+            for coll_name in sorted(collection_stats.keys()):
+                stats = collection_stats[coll_name]
+                items_count = len(stats["items"])
+
                 # Extract chapter number if matches pattern
                 match = re.match(chapter_pattern, coll_name)
                 chapter_num = match.group(1) if match else "-"
 
-                # Only show collections with items
-                if items > 0:
-                    table.add_row(
-                        chapter_num,
-                        coll_name[:50] + "..." if len(coll_name) > 50 else coll_name,
-                        str(items),
-                        str(pdf) if pdf > 0 else "-",
-                        str(html) if html > 0 else "-",
-                        str(txt) if txt > 0 else "-",
-                        str(other) if other > 0 else "-",
-                    )
+                table.add_row(
+                    chapter_num,
+                    coll_name[:45] + "..." if len(coll_name) > 45 else coll_name,
+                    str(items_count),
+                    str(stats["chunks"]),
+                    str(stats["pdf"]) if stats["pdf"] > 0 else "-",
+                    str(stats["html"]) if stats["html"] > 0 else "-",
+                    str(stats["txt"]) if stats["txt"] > 0 else "-",
+                )
 
-                    total_items += items
-                    total_pdf += pdf
-                    total_html += html
-                    total_txt += txt
-                    total_other += other
-                    if match:
-                        chapter_count += 1
+                total_items += items_count
+                total_chunks += stats["chunks"]
+                total_pdf += stats["pdf"]
+                total_html += stats["html"]
+                total_txt += stats["txt"]
+                if match:
+                    chapter_count += 1
 
             # Add totals row
             table.add_section()
@@ -527,23 +561,18 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                 "[bold]TOTAL",
                 f"[bold]{chapter_count} chapters",
                 f"[bold]{total_items}",
+                f"[bold cyan]{total_chunks}",
                 f"[bold green]{total_pdf}",
                 f"[bold blue]{total_html}",
                 f"[bold yellow]{total_txt}",
-                f"[bold dim]{total_other}",
             )
 
+            self.console.print(
+                f"[dim]Showing indexed Zotero data ({len(all_points):,} chunks)[/dim]\n"
+            )
             self.console.print(table)
             self.console.print()
 
-        except sqlite3.OperationalError as e:
-            if "locked" in str(e).lower():
-                self.console.print("[red]✗ Zotero database is locked[/red]")
-                self.console.print(
-                    "[yellow]Please close Zotero and try again[/yellow]\n"
-                )
-            else:
-                self.console.print(f"[red]✗ Database error: {e}[/red]\n")
         except Exception as e:
             self.console.print(f"[red]✗ Error: {e}[/red]\n")
             import traceback
