@@ -292,8 +292,19 @@ class BookRAG:
         for source_type, ts in timestamps.items():
             if ts:
                 try:
+                    from datetime import timezone
+
+                    # Parse timestamp (may be timezone-aware or naive)
                     dt = datetime.fromisoformat(ts)
-                    age = datetime.now() - dt
+
+                    # If naive, assume UTC (for backward compatibility)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+
+                    # Calculate age using UTC
+                    now_utc = datetime.now(timezone.utc)
+                    age = now_utc - dt
+
                     if age.days > 0:
                         formatted = f"{age.days} day{'s' if age.days > 1 else ''} ago"
                     elif age.seconds > 3600:

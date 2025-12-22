@@ -82,6 +82,10 @@ class ScrivenerIndexer:
             title = item.get("title", "Untitled")
 
             if uuid:
+                # Inherit chapter number from parent if not explicitly set
+                if not chapter_num and parent_info:
+                    chapter_num = parent_info.get("chapter_number")
+
                 # Store metadata for this UUID
                 self.uuid_to_chapter[uuid] = {
                     "chapter_number": chapter_num,
@@ -124,10 +128,10 @@ class ScrivenerIndexer:
             f"Indexed {stats['documents_indexed']} Scrivener documents, {stats['chunks_indexed']} chunks"
         )
 
-        # Update index timestamp
-        from datetime import datetime
+        # Update index timestamp (use UTC)
+        from datetime import datetime, timezone
 
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         self.vectordb.set_index_timestamp("scrivener", timestamp)
 
         return stats

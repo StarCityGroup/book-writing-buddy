@@ -43,7 +43,7 @@ data/*
 !data/project.example.json
 !data/outline.example.txt
 !data/.gitkeep
-vectordb/
+/vectordb/
 
 # MCP testing
 .mcp_test/

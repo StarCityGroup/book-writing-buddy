@@ -26,10 +26,14 @@ services:
       # Configuration files
       - ./config:/app/config:ro
 
+      # Local model cache for offline operation
+      - ./data/models:/models:ro
+
     environment:
       - QDRANT_URL=http://qdrant:6333
       - ZOTERO_PATH=/mnt/zotero
       - ZOTERO_ROOT_COLLECTION=${ZOTERO_ROOT_COLLECTION:-}
       - SCRIVENER_PATH=/mnt/scrivener
+      - MODEL_CACHE_DIR=/models
 
     restart: unless-stopped

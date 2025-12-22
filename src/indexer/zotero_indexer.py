@@ -262,10 +262,10 @@ class ZoteroIndexer:
             f"{stats['chunks_indexed']} chunks"
         )
 
-        # Update index timestamp
-        from datetime import datetime
+        # Update index timestamp (use UTC)
+        from datetime import datetime, timezone
 
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         self.vectordb.set_index_timestamp("zotero", timestamp)
 
         return stats
