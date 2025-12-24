@@ -498,11 +498,15 @@ class BookRAG:
             Dict with chapter list from Scrivener
         """
         scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
+        scrivener_manuscript_folder = os.getenv("SCRIVENER_MANUSCRIPT_FOLDER", "")
         if not scrivener_path or not Path(scrivener_path).exists():
             return {"error": "Scrivener project path not configured or doesn't exist"}
 
         try:
-            parser = ScrivenerParser(scrivener_path)
+            parser = ScrivenerParser(
+                scrivener_path,
+                manuscript_folder=scrivener_manuscript_folder or None
+            )
             structure = parser.get_chapter_structure()
             return {
                 "project_name": structure["project_name"],

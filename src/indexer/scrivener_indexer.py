@@ -21,7 +21,11 @@ class ScrivenerIndexer:
     """Index Scrivener project documents"""
 
     def __init__(
-        self, scrivener_path: str, vectordb: VectorDBClient, config: Dict[str, Any]
+        self,
+        scrivener_path: str,
+        vectordb: VectorDBClient,
+        config: Dict[str, Any],
+        manuscript_folder: Optional[str] = None,
     ):
         """
         Initialize Scrivener indexer.
@@ -30,11 +34,13 @@ class ScrivenerIndexer:
             scrivener_path: Path to .scriv bundle
             vectordb: Vector database client
             config: Configuration dict
+            manuscript_folder: Optional name of manuscript folder to filter by
         """
         self.scrivener_path = Path(scrivener_path)
         self.files_path = self.scrivener_path / "Files" / "Data"
         self.vectordb = vectordb
         self.config = config
+        self.manuscript_folder = manuscript_folder
 
         # Initialize chunker
         self.chunker = ScrivenerChunker(
@@ -59,7 +65,7 @@ class ScrivenerIndexer:
         # Parse Scrivener structure to get accurate chapter mapping
         self.uuid_to_chapter = {}
         try:
-            parser = ScrivenerParser(str(scrivener_path))
+            parser = ScrivenerParser(str(scrivener_path), manuscript_folder=manuscript_folder)
             structure = parser.get_chapter_structure()
             self._build_uuid_mapping(structure.get("structure", []))
             logger.info(
@@ -80,18 +86,32 @@ class ScrivenerIndexer:
             uuid = item.get("uuid")
             chapter_num = item.get("chapter_number")
             title = item.get("title", "Untitled")
+            is_folder = item.get("is_folder", False)
 
             if uuid:
-                # Inherit chapter number from parent if not explicitly set
-                if not chapter_num and parent_info:
-                    chapter_num = parent_info.get("chapter_number")
+                # Determine chapter title
+                # If this item has a chapter number, it's a chapter folder - use its title
+                # Otherwise, inherit the chapter title from parent
+                # Note: Check "is not None" because chapter_num can be 0 (Preface)
+                if chapter_num is not None and is_folder:
+                    chapter_title = title
+                elif chapter_num is not None and not is_folder:
+                    # Single document with chapter number (like Preface) - use its title
+                    chapter_title = title
+                elif parent_info:
+                    chapter_title = parent_info.get("chapter_title", title)
+                    # Also inherit chapter number if not set
+                    if chapter_num is None:
+                        chapter_num = parent_info.get("chapter_number")
+                else:
+                    chapter_title = title
 
                 # Store metadata for this UUID
                 self.uuid_to_chapter[uuid] = {
                     "chapter_number": chapter_num,
-                    "chapter_title": title,
+                    "chapter_title": chapter_title,
                     "parent": parent_info.get("chapter_title") if parent_info else None,
-                    "is_folder": item.get("is_folder", False),
+                    "is_folder": is_folder,
                 }
 
                 # Recurse into children, passing chapter info down
@@ -167,8 +187,16 @@ class ScrivenerIndexer:
             # Determine document type
             doc_type = self._determine_doc_type(rtf_path, text)
 
-            # Extract UUID from filename (Scrivener uses UUIDs)
-            scrivener_uuid = rtf_path.stem
+            # Extract UUID from parent directory (Scrivener structure is UUID/content.rtf)
+            # If file is directly in Data (not in a subdirectory), use the filename
+            if rtf_path.parent.name == "Data":
+                scrivener_uuid = rtf_path.stem
+            else:
+                scrivener_uuid = rtf_path.parent.name
+
+            # If manuscript_folder is set and this UUID isn't in our mapping, skip it
+            if self.manuscript_folder and scrivener_uuid not in self.uuid_to_chapter:
+                return 0
 
             # Build metadata
             metadata = {
@@ -181,7 +209,8 @@ class ScrivenerIndexer:
             # Get chapter info from UUID mapping (preferred) or fall back to guessing
             if scrivener_uuid in self.uuid_to_chapter:
                 chapter_info = self.uuid_to_chapter[scrivener_uuid]
-                if chapter_info.get("chapter_number"):
+                # Use "is not None" because chapter_number can be 0 (Preface)
+                if chapter_info.get("chapter_number") is not None:
                     metadata["chapter_number"] = chapter_info["chapter_number"]
                     metadata["chapter_title"] = chapter_info.get("chapter_title", "")
                 if chapter_info.get("parent"):

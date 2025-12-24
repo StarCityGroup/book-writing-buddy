@@ -40,10 +40,13 @@ def main():
     # Get paths from environment
     zotero_path = os.getenv("ZOTERO_PATH", "/mnt/zotero")
     scrivener_path = os.getenv("SCRIVENER_PATH", "/mnt/scrivener")
+    scrivener_manuscript_folder = os.getenv("SCRIVENER_MANUSCRIPT_FOLDER", "")
     qdrant_url = os.getenv("QDRANT_URL", "http://qdrant:6333")
 
     logger.info(f"Zotero path: {zotero_path}")
     logger.info(f"Scrivener path: {scrivener_path}")
+    if scrivener_manuscript_folder:
+        logger.info(f"Scrivener manuscript folder: {scrivener_manuscript_folder}")
     logger.info(f"Qdrant URL: {qdrant_url}")
 
     # Initialize vector DB client
@@ -77,7 +80,10 @@ def main():
     # Index Scrivener
     logger.info("Indexing Scrivener project...")
     scrivener_indexer = ScrivenerIndexer(
-        scrivener_path=scrivener_path, vectordb=vectordb, config=config
+        scrivener_path=scrivener_path,
+        vectordb=vectordb,
+        config=config,
+        manuscript_folder=scrivener_manuscript_folder or None,
     )
 
     try:

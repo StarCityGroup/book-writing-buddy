@@ -24,11 +24,15 @@ def load_book_context() -> str:
 
     # 1. Get Scrivener chapter structure (definitive)
     scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
+    scrivener_manuscript_folder = os.getenv("SCRIVENER_MANUSCRIPT_FOLDER", "")
     if scrivener_path and Path(scrivener_path).exists():
         try:
             from .scrivener_parser import ScrivenerParser
 
-            parser = ScrivenerParser(scrivener_path)
+            parser = ScrivenerParser(
+                scrivener_path,
+                manuscript_folder=scrivener_manuscript_folder or None
+            )
             structure = parser.format_structure_as_text()
             parts.append(structure)
         except Exception as e:

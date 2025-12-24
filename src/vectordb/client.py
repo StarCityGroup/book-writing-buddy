@@ -297,6 +297,18 @@ class VectorDBClient:
         logger.info(f"Deleted points matching {filters}")
         return True
 
+    def delete_by_source(self, source_type: str) -> bool:
+        """
+        Delete all points from a specific source.
+
+        Args:
+            source_type: Source type to delete ("zotero" or "scrivener")
+
+        Returns:
+            True if successful
+        """
+        return self.delete_by_filter({"source_type": source_type})
+
     def get_collection_info(self) -> Dict[str, Any]:
         """Get collection statistics"""
         info = self.client.get_collection(self.collection_name)

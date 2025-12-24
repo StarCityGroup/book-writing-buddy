@@ -190,9 +190,32 @@ Collections are matched by number: `{chapter_number}.` prefix
 
 ### Scrivener Setup
 
-The system automatically reads your chapter structure from the Scrivener `.scrivx` file. Organize your project with numbered chapters (e.g., "1. Chapter Title", "Chapter 1: Title") for best results.
+The system automatically reads your chapter structure from the Scrivener `.scrivx` file and assigns sequential chapter numbers.
 
-The indexer will process RTF files in your Scrivener project and extract chapter numbers from folder names.
+**Chapter Numbering:**
+- **Chapters 1-N**: Regular chapters are assigned sequential numbers (1, 2, 3...) based on their order in the manuscript
+- **Chapter 0**: Preface or Introduction are automatically assigned chapter number 0
+  - If you have **only one** of "Preface" or "Introduction", it gets chapter number **0**
+  - If you have **both** Preface and Introduction, they get **0A** and **0B** respectively
+- **Manuscript Folder**: Set `SCRIVENER_MANUSCRIPT_FOLDER` in `.env` to specify which folder contains your manuscript (e.g., "FIREWALL", "Manuscript", "Draft")
+  - Only documents inside this folder will be indexed
+  - Documents in Research, Trash, or other folders are excluded
+
+**Recommended Structure:**
+```
+YourProject.scriv/
+└── Manuscript (or your folder name)/
+    ├── Preface                    # → Chapter 0
+    ├── Part I/
+    │   ├── Chapter 1 Title       # → Chapter 1
+    │   └── Chapter 2 Title       # → Chapter 2
+    ├── Part II/
+    │   ├── Chapter 3 Title       # → Chapter 3
+    │   └── ...
+    └── ...
+```
+
+The indexer will process all RTF files in your manuscript folder and propagate chapter numbers to nested documents.
 
 ### Settings
 

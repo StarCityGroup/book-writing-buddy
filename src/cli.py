@@ -705,6 +705,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             # Get paths from environment
             zotero_path = os.getenv("ZOTERO_PATH")
             scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
+            scrivener_manuscript_folder = os.getenv("SCRIVENER_MANUSCRIPT_FOLDER", "")
             qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
 
             # Validate paths based on what we're indexing
@@ -738,6 +739,10 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 
             # Index Zotero (if requested)
             if source in ["all", "zotero"]:
+                # Delete old Zotero data first
+                self.console.print("[dim]Removing old Zotero data...[/dim]")
+                vectordb.delete_by_source("zotero")
+
                 self.console.print("[dim]Indexing Zotero library...[/dim]")
                 with Status(
                     "[bold cyan]Indexing Zotero...[/bold cyan]",
@@ -756,6 +761,10 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 
             # Index Scrivener (if requested)
             if source in ["all", "scrivener"]:
+                # Delete old Scrivener data first
+                self.console.print("[dim]Removing old Scrivener data...[/dim]")
+                vectordb.delete_by_source("scrivener")
+
                 self.console.print("[dim]Indexing Scrivener project...[/dim]")
                 with Status(
                     "[bold cyan]Indexing Scrivener...[/bold cyan]",
@@ -763,7 +772,10 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                     console=self.console,
                 ):
                     scrivener_indexer = ScrivenerIndexer(
-                        scrivener_path=scrivener_path, vectordb=vectordb, config=config
+                        scrivener_path=scrivener_path,
+                        vectordb=vectordb,
+                        config=config,
+                        manuscript_folder=scrivener_manuscript_folder or None,
                     )
                     scrivener_stats = scrivener_indexer.index_all()
 

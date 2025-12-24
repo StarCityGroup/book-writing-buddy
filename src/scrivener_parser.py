@@ -8,13 +8,15 @@ from typing import Dict, List, Optional
 class ScrivenerParser:
     """Parse chapter structure from Scrivener .scrivx project file."""
 
-    def __init__(self, scrivener_path: str):
+    def __init__(self, scrivener_path: str, manuscript_folder: Optional[str] = None):
         """Initialize parser with path to .scriv project.
 
         Args:
             scrivener_path: Path to .scriv project directory
+            manuscript_folder: Optional name of manuscript folder to filter by (e.g., "FIREWALL", "Manuscript")
         """
         self.scriv_path = Path(scrivener_path)
+        self.manuscript_folder = manuscript_folder
 
         # Find the .scrivx file dynamically (there should only be one)
         scrivx_files = list(self.scriv_path.glob("*.scrivx"))
@@ -47,6 +49,12 @@ class ScrivenerParser:
 
         # Parse the structure
         structure = self._parse_binder_item(binder, level=0)
+
+        # Filter by manuscript folder if specified
+        if self.manuscript_folder:
+            structure = self._filter_by_manuscript_folder(structure, self.manuscript_folder)
+            # After filtering, assign sequential chapter numbers
+            structure = self._assign_sequential_chapters(structure)
 
         return {
             "project_name": self.scriv_path.stem,
@@ -132,6 +140,101 @@ class ScrivenerParser:
 
         return None
 
+    def _assign_sequential_chapters(self, structure: List[Dict]) -> List[Dict]:
+        """Assign sequential chapter numbers to folders after filtering.
+
+        After filtering to manuscript folder, chapter folders don't have numbers.
+        This assigns them sequentially and propagates to all nested children.
+
+        Args:
+            structure: Filtered structure (contents of manuscript folder)
+
+        Returns:
+            Structure with chapter numbers assigned
+        """
+        chapter_counter = 0
+
+        def propagate_chapter_number(item, chapter_num):
+            """Recursively assign chapter number to item and all its children."""
+            item["chapter_number"] = chapter_num
+            if "children" in item:
+                for child in item["children"]:
+                    propagate_chapter_number(child, chapter_num)
+
+        # Track chapter 0 items (Preface, Introduction, etc.)
+        chapter_zero_items = []
+        chapter_zero_names = ["preface", "introduction"]
+
+        # Process top-level items in the manuscript folder
+        for item in structure:
+            title = item.get("title", "").lower()
+
+            # Check if this is a "Part" folder
+            if item.get("is_folder") and title.startswith("part "):
+                # Process chapter folders inside the Part
+                if "children" in item:
+                    for chapter in item["children"]:
+                        if chapter.get("is_folder"):
+                            chapter_counter += 1
+                            propagate_chapter_number(chapter, chapter_counter)
+            # Or if it's a standalone item at level 0 (like Preface or Introduction)
+            elif title and title not in ["untitled", ""]:
+                # Check if this is a chapter 0 item
+                if title in chapter_zero_names:
+                    chapter_zero_items.append(item)
+                else:
+                    chapter_counter += 1
+                    propagate_chapter_number(item, chapter_counter)
+
+        # Assign chapter 0 numbers (0, or 0A, 0B if multiple)
+        if len(chapter_zero_items) == 1:
+            propagate_chapter_number(chapter_zero_items[0], 0)
+        elif len(chapter_zero_items) > 1:
+            # Multiple chapter 0 items - use 0A, 0B, etc.
+            for idx, item in enumerate(chapter_zero_items):
+                chapter_num = f"0{chr(65 + idx)}"  # 0A, 0B, 0C...
+                propagate_chapter_number(item, chapter_num)
+
+        return structure
+
+    def _filter_by_manuscript_folder(
+        self, structure: List[Dict], manuscript_folder: str
+    ) -> List[Dict]:
+        """Filter structure to only include items under the manuscript folder.
+
+        Args:
+            structure: Full parsed structure
+            manuscript_folder: Name of manuscript folder to filter by
+
+        Returns:
+            Filtered structure containing only items under manuscript folder
+        """
+
+        def find_manuscript_folder(items):
+            """Recursively search for manuscript folder."""
+            for item in items:
+                if item.get("title") == manuscript_folder:
+                    # Return children of this folder
+                    return item.get("children", [])
+                # Search in children
+                if "children" in item:
+                    result = find_manuscript_folder(item["children"])
+                    if result is not None:
+                        return result
+            return None
+
+        filtered = find_manuscript_folder(structure)
+        if filtered is None:
+            import structlog
+
+            logger = structlog.get_logger()
+            logger.warning(
+                f"Manuscript folder '{manuscript_folder}' not found in Scrivener structure"
+            )
+            return []
+
+        return filtered
+
     def _flatten_chapters(self, structure: List[Dict]) -> List[Dict]:
         """Flatten hierarchical structure to list of chapters.
 
@@ -139,18 +242,24 @@ class ScrivenerParser:
             structure: Nested structure from _parse_binder_item
 
         Returns:
-            Flat list of chapters with metadata
+            Flat list of chapters with metadata (only chapter folders, not nested docs)
         """
         chapters = []
 
-        def recurse(items, parent_title=None):
+        def recurse(items, parent_title=None, parent_is_part=False):
             for item in items:
-                # If it has a chapter number, add it
-                if "chapter_number" in item:
+                has_chapter_num = "chapter_number" in item
+                title = item.get("title", "")
+                is_part = title.lower().startswith("part ")
+
+                # Include in chapters list if:
+                # 1. Has chapter number AND is at top level (parent_title is None) - e.g., Preface
+                # 2. Has chapter number AND parent is a Part folder
+                if has_chapter_num and (parent_title is None or parent_is_part):
                     chapters.append(
                         {
                             "number": item["chapter_number"],
-                            "title": item["title"],
+                            "title": title,
                             "parent": parent_title,
                             "level": item["level"],
                         }
@@ -158,7 +267,7 @@ class ScrivenerParser:
 
                 # Recurse into children
                 if "children" in item:
-                    recurse(item["children"], parent_title=item["title"])
+                    recurse(item["children"], parent_title=title, parent_is_part=is_part)
 
         recurse(structure)
 

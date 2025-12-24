@@ -34,6 +34,7 @@ services:
       - ZOTERO_PATH=/mnt/zotero
       - ZOTERO_ROOT_COLLECTION=${ZOTERO_ROOT_COLLECTION:-}
       - SCRIVENER_PATH=/mnt/scrivener
+      - SCRIVENER_MANUSCRIPT_FOLDER=${SCRIVENER_MANUSCRIPT_FOLDER:-}
       - MODEL_CACHE_DIR=/models
 
     restart: unless-stopped
