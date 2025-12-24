@@ -242,16 +242,62 @@ class ScrivenerIndexer:
             return 0
 
     def _determine_doc_type(self, path: Path, text: str) -> str:
-        """Determine if document is draft, note, or synopsis"""
-        # Check path for common Scrivener folders
-        path_str = str(path).lower()
+        """Determine document type based on text structure.
 
-        if "draft" in path_str or "manuscript" in path_str:
-            return "draft"
-        elif "research" in path_str or "notes" in path_str:
-            return "note"
-        elif len(text) < 500:  # Short text likely a synopsis
-            return "synopsis"
+        - draft: Documents with complete paragraphs and prose
+        - notes: Fragmented text, bullet points, short lines
+        """
+        if not text.strip():
+            return "notes"
+
+        # Split into lines and paragraphs
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+
+        if len(lines) == 0:
+            return "notes"
+
+        # Calculate text structure metrics
+        total_chars = len(text.strip())
+        avg_line_length = sum(len(line) for line in lines) / len(lines)
+        avg_para_length = sum(len(p) for p in paragraphs) / len(paragraphs) if paragraphs else 0
+
+        # Count indicators of fragmentary text
+        fragment_indicators = 0
+
+        # 1. Short average line length (< 60 chars suggests bullet points or fragments)
+        if avg_line_length < 60:
+            fragment_indicators += 1
+
+        # 2. Many short lines (< 40 chars)
+        short_lines = sum(1 for line in lines if len(line) < 40)
+        if short_lines / len(lines) > 0.4:  # More than 40% short lines
+            fragment_indicators += 1
+
+        # 3. Bullet point indicators (-, *, •, numbers)
+        bullet_pattern = r'^\s*[-*•]\s+|^\s*\d+[\.)]\s+'
+        import re
+        bullet_lines = sum(1 for line in lines if re.match(bullet_pattern, line))
+        if bullet_lines / len(lines) > 0.2:  # More than 20% bullets
+            fragment_indicators += 1
+
+        # 4. URLs present (research/reference material)
+        url_pattern = r'https?://|www\.|\.com|\.org|\.edu|\.gov'
+        url_matches = re.findall(url_pattern, text, re.IGNORECASE)
+        if len(url_matches) >= 3:  # 3+ URLs suggests notes/references
+            fragment_indicators += 1
+
+        # 5. Very short paragraphs (avg < 100 chars suggests notes)
+        if avg_para_length < 100:
+            fragment_indicators += 1
+
+        # 6. Many single-line paragraphs (each line is its own paragraph)
+        if len(paragraphs) > len(lines) * 0.7:
+            fragment_indicators += 1
+
+        # Decision: If 2+ fragment indicators, it's notes
+        if fragment_indicators >= 2:
+            return "notes"
         else:
             return "draft"
 
