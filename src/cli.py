@@ -528,8 +528,18 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             total_txt = 0
             chapter_count = 0
 
-            # Sort collections by name
-            for coll_name in sorted(collection_stats.keys()):
+            # Sort collections by chapter number (numerically), then by name
+            def sort_key(coll_name):
+                match = re.match(chapter_pattern, coll_name)
+                if match:
+                    # Extract chapter number and convert to int for numeric sorting
+                    # Handle "0" for preface
+                    return (0, int(match.group(1)), coll_name)
+                else:
+                    # Non-chapter collections sort last
+                    return (1, 0, coll_name)
+
+            for coll_name in sorted(collection_stats.keys(), key=sort_key):
                 stats = collection_stats[coll_name]
                 items_count = len(stats["items"])
 
