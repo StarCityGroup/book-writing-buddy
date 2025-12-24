@@ -79,11 +79,21 @@ The TUI agent understands natural language queries about your research:
 - "Check if my chapters are in sync"
 - "What chapters does my book have?"
 
+**Cross-Chapter Analysis:**
+- "Track the theme 'resilience' across all chapters"
+- "Compare research density between chapters 5 and 9"
+- "What are the key sources for chapter 3?"
+- "Analyze source diversity for chapter 12"
+
 **Similarity & Plagiarism:**
 - "Find similar content to this paragraph: [text]"
 - "Check for duplicate content"
 
-The agent automatically routes your query to the right tools and synthesizes results into actionable insights.
+**Export & Bibliography:**
+- "Export a research summary for chapter 7"
+- "Generate an APA bibliography for chapter 4"
+
+The agent **autonomously decides** which tools to use, can call multiple tools, and synthesizes results into comprehensive, cited responses.
 
 ## Architecture
 
@@ -112,52 +122,82 @@ The agent automatically routes your query to the right tools and synthesizes res
 └─────────────────────────────────────────┘
           ↓ (query via BookRAG)
 ┌─────────────────────────────────────────┐
-│  TUI Agent (LangGraph)                 │
-│  └─ See agent flow diagram below       │
+│  TUI Agent (LangGraph ReAct)           │
+│  └─ 12 research tools                  │
+│  └─ Autonomous research loop           │
 └─────────────────────────────────────────┘
 ```
 
-### TUI Agent Flow
+### Agent Architecture
 
-The agent uses LangGraph to route queries through specialized nodes:
+The TUI agent uses a **ReAct (Reasoning + Acting)** pattern with direct tool access. Instead of rigid workflows, the agent autonomously decides which tools to use and when.
 
 ```mermaid
 graph TD
-    Start([User Query]) --> Planning[Planning Node]
-    Planning --> Router{Query Type?}
+    Start([User Query]) --> Agent[ReAct Agent]
 
-    Router -->|Search| Search[Search Node<br/>Semantic search]
-    Router -->|Annotations| Annotations[Annotations Node<br/>Get Zotero notes]
-    Router -->|Gaps| Gaps[Gap Analysis Node<br/>Find weak chapters]
-    Router -->|Similar| Similar[Similarity Node<br/>Find duplicates]
-    Router -->|Chapter Info| ChapterInfo[Chapter Info Node<br/>Get chapter details]
-    Router -->|Sync Check| Sync[Sync Check Node<br/>Compare sources]
-    Router -->|List| List[List Chapters Node<br/>Show all chapters]
+    Agent --> Think{Plan Research}
+    Think --> Tools[Select Tools]
 
-    Search --> Analyze[Analysis Node]
-    Annotations --> Analyze
-    Gaps --> Analyze
-    Similar --> Analyze
-    ChapterInfo --> Analyze
-    Sync --> Analyze
-    List --> Analyze
+    Tools --> T1[search_research]
+    Tools --> T2[get_annotations]
+    Tools --> T3[compare_chapters]
+    Tools --> T4[find_cross_chapter_themes]
+    Tools --> T5[analyze_source_diversity]
+    Tools --> T6[+ 7 more tools...]
 
-    Analyze --> Decision{Need Refinement?}
-    Decision -->|Yes| Refine[Refinement Node]
-    Decision -->|No| End([Response])
-    Refine --> Analyze
+    T1 --> Observe[Observe Results]
+    T2 --> Observe
+    T3 --> Observe
+    T4 --> Observe
+    T5 --> Observe
+    T6 --> Observe
 
-    style Planning fill:#e1f5ff
-    style Analyze fill:#fff4e1
-    style Router fill:#ffe1e1
-    style End fill:#e1ffe1
+    Observe --> Think
+    Think -->|Sufficient Info| Respond[Synthesize & Respond]
+    Respond --> End([Final Answer])
+
+    style Agent fill:#e1f5ff
+    style Think fill:#ffe1e1
+    style Tools fill:#fff4e1
+    style Respond fill:#e1ffe1
+    style End fill:#d4edda
 ```
 
 **How it works:**
-1. **Planning** - Classifies user query and determines which tool to use
-2. **Tool Nodes** - Execute specific research operations (search, get annotations, etc.)
-3. **Analysis** - LLM synthesizes results into coherent response
-4. **Refinement** - Optional loop if user provides feedback
+
+1. **User Query** → Agent receives natural language question
+2. **ReAct Loop** (autonomous):
+   - **Think**: "What information do I need?"
+   - **Act**: Use tools to gather data (can use multiple tools)
+   - **Observe**: Examine tool results
+   - **Repeat**: Continue until sufficient information gathered
+3. **Synthesize** → Agent analyzes all results
+4. **Respond** → Present findings with citations and insights
+
+### Available Tools (12 total)
+
+The agent has direct access to these research tools:
+
+**Core Research:**
+- `search_research` - Semantic search with chapter filtering
+- `get_annotations` - Retrieve Zotero highlights and notes
+- `get_chapter_info` - Detailed chapter statistics
+- `list_chapters` - Book structure from Scrivener
+- `check_sync` - Alignment status between sources
+- `get_scrivener_summary` - Per-chapter indexing breakdown
+
+**Analysis:**
+- `compare_chapters` - Compare research density between chapters
+- `find_cross_chapter_themes` - Track themes across the manuscript
+- `analyze_source_diversity` - Check source type balance
+- `identify_key_sources` - Find most-cited sources
+
+**Export:**
+- `export_chapter_summary` - Generate research briefs
+- `generate_bibliography` - Create citations (APA/MLA/Chicago)
+
+The agent **autonomously chooses** which tools to use and can combine them creatively to answer complex questions.
 
 ### How It Works
 
@@ -232,65 +272,52 @@ Edit `config/default.json` for embedding and chunking parameters:
 }
 ```
 
-## Skills Reference
+## Advanced Features
 
-### search-research
+### Cross-Chapter Theme Tracking
 
-Search indexed materials with semantic similarity.
+Track how concepts and themes develop across your manuscript:
 
-**Parameters:**
-- `query` (string, required): What to search for
-- `chapter_number` (integer, optional): Filter to specific chapter
-- `source_type` (string, optional): "zotero" or "scrivener"
-- `limit` (integer, optional): Max results (default: 20)
-
-**Example:**
-```json
-{
-  "query": "infrastructure failures in coastal cities",
-  "chapter_number": 9,
-  "source_type": "zotero",
-  "limit": 10
-}
+```
+"Track the theme 'infrastructure failure' across all chapters"
+"Where does 'resilience' appear in the book?"
 ```
 
-### get-annotations
+The agent uses semantic search to find related content even when exact wording differs.
 
-Get all Zotero annotations for a chapter.
+### Chapter Comparison
 
-**Parameters:**
-- `chapter_number` (integer, required): Chapter number (1-27)
+Compare research density and coverage:
 
-**Returns:** All highlights, notes, and comments organized by source.
+```
+"Compare research density between chapters 5 and 9"
+"Which has more sources, chapter 3 or chapter 7?"
+```
 
-### analyze-gaps
+Helps identify chapters that need more research and maintain balanced coverage.
 
-Identify research gaps in your manuscript.
+### Source Diversity Analysis
 
-**Parameters:**
-- `chapter_number` (integer, optional): Analyze specific chapter, or omit for manuscript-wide
+Evaluate whether you're relying too heavily on one type of source:
 
-**Returns:** Gap analysis with source counts, coverage metrics, recommendations.
+```
+"Analyze source diversity for chapter 3"
+"Am I using a good mix of sources in chapter 9?"
+```
 
-### find-similar
+Uses Simpson's Diversity Index to measure balance across books, articles, reports, etc.
 
-Find similar or duplicate content.
+### Research Export
 
-**Parameters:**
-- `text` (string, required): Text to find similarities for
-- `threshold` (float, optional): Similarity threshold 0-1 (default: 0.85)
-- `limit` (integer, optional): Max results (default: 10)
+Generate formatted summaries and bibliographies:
 
-**Returns:** Similar content with scores and source info.
+```
+"Export a research summary for chapter 7"
+"Generate an APA bibliography for chapter 4"
+"Create a research brief for chapter 5 in markdown"
+```
 
-### get-chapter-info
-
-Get comprehensive chapter information.
-
-**Parameters:**
-- `chapter_number` (integer, required): Chapter number
-
-**Returns:** Zotero collection details, source count, Scrivener content stats.
+Perfect for preparing reference materials before writing sessions.
 
 ## Indexing
 
@@ -435,35 +462,32 @@ This reports:
 ```
 book-writing-buddy/
 ├── README.md
-├── CLAUDE.md                  # Project context for Claude Code
-├── docker-compose.yml         # Qdrant container
+├── CLAUDE.md                  # Project context for AI agent
+├── docker-compose.yml         # Qdrant + Indexer containers
 ├── pyproject.toml            # Python dependencies (uv)
+├── main.py                   # TUI agent entry point
 ├── config/
-│   └── default.json          # Settings
-├── .claude/
-│   └── skills/               # Claude Code skills
-│       ├── search-research/
-│       ├── get-annotations/
-│       ├── analyze-gaps/
-│       ├── find-similar/
-│       └── get-chapter-info/
-├── scripts/
-│   ├── index_all.py          # Index everything
-│   ├── index_zotero.py       # Index Zotero only
-│   └── index_scrivener.py    # Index Scrivener only
+│   └── default.json          # Embedding & chunking settings
 ├── src/
+│   ├── agent_v2.py           # ReAct agent (LangGraph)
+│   ├── tools.py              # 12 research tools
+│   ├── cli.py                # Interactive TUI
+│   ├── rag.py                # BookRAG query interface
 │   ├── indexer/              # Indexing logic
-│   │   ├── chunking.py
 │   │   ├── zotero_indexer.py
-│   │   └── scrivener_indexer.py
+│   │   ├── scrivener_indexer.py
+│   │   └── run_initial_index.py
+│   ├── watcher/              # File watching daemon
+│   │   └── run_daemon.py
 │   ├── vectordb/
 │   │   └── client.py         # Qdrant wrapper
-│   └── skills/               # Reusable skill logic
-│       ├── fact_extractor.py
-│       ├── annotation_aggregator.py
-│       └── ...
-└── data/
-    └── qdrant_storage/       # Vector database (gitignored)
+│   └── scrivener_parser.py   # .scrivx structure parser
+├── data/
+│   ├── outline.txt           # Book context (optional)
+│   └── qdrant_storage/       # Vector database (gitignored)
+└── docs/
+    ├── ARCHITECTURE_V2.md    # Technical architecture
+    └── MIGRATION_COMPLETE.md # V1 → V2 migration notes
 ```
 
 ## Performance
@@ -505,7 +529,7 @@ A: The file watcher automatically re-indexes when files change. No manual action
 A: Currently Zotero and Scrivener only, but the architecture is extensible.
 
 **Q: Is my research sent to the cloud?**
-A: Indexing is 100% local. Only Claude Code queries use the Claude API.
+A: Indexing is 100% local. Only TUI agent queries use the Claude API (via LiteLLM proxy).
 
 **Q: What if I don't have chapter numbers?**
 A: The system will still work, you just can't filter by chapter.
@@ -514,9 +538,10 @@ A: The system will still work, you just can't filter by chapter.
 
 - **Close Zotero** before starting to avoid database locks
 - **Wait for initial indexing** - Look for "Starting file watcher daemon" in logs
-- **File watcher is automatic** - Add research anytime, it'll be indexed
-- **Use natural language** with skills - no need for exact syntax
-- **Skills work best** with chapter-organized Zotero collections (numbered)
+- **File watcher is automatic** - Add research anytime, it'll be indexed (5-second debounce)
+- **Use natural language** queries - the agent understands conversational questions
+- **Agent is autonomous** - it decides which tools to use and can combine them
+- **Chapter-organized collections** work best - use `{number}. {title}` pattern in Zotero
 - **Monitor performance** with `docker stats` if needed
 
 ## License
@@ -527,7 +552,8 @@ MIT License
 
 - [Qdrant](https://qdrant.tech/) - Vector database
 - [sentence-transformers](https://www.sbert.net/) - Embeddings
-- [Anthropic Claude](https://www.anthropic.com/claude) - Claude Code
+- [LangGraph](https://langchain-ai.github.io/langgraph/) - Agent framework
+- [Anthropic Claude](https://www.anthropic.com/claude) - LLM via LiteLLM
 - [uv](https://github.com/astral-sh/uv) - Python package manager
 
 ---

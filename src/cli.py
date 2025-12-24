@@ -14,9 +14,8 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.status import Status
 
-from .agent import create_agent
+from .agent_v2 import create_research_agent
 from .rag import BookRAG
-from .state import create_initial_state
 
 
 class BookResearchChatCLI:
@@ -27,8 +26,8 @@ class BookResearchChatCLI:
         load_dotenv()
 
         self.console = Console()
-        self.agent = create_agent()
-        self.state = create_initial_state()
+        self.agent = create_research_agent()
+        self.conversation_history = []  # Store conversation messages
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.conversation_dir = Path("conversations")
         self.conversation_dir.mkdir(exist_ok=True)
@@ -212,7 +211,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 
         elif command_lower == "/new":
             self.save_conversation()
-            self.state = create_initial_state()
+            self.conversation_history = []
             self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.console.print("\n[green]Started new research session.[/green]\n")
 
@@ -251,7 +250,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                 if tier in model_map:
                     os.environ["DEFAULT_MODEL"] = model_map[tier]
                     # Recreate agent with new model
-                    self.agent = create_agent()
+                    self.agent = create_research_agent()
                     self.console.print(
                         f"\n[green]✓ Switched to {tier} ({model_map[tier]})[/green]\n"
                     )
@@ -834,7 +833,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 
     def save_conversation(self):
         """Save current conversation to file."""
-        if not self.state.get("messages"):
+        if not self.conversation_history:
             return
 
         filepath = self.conversation_dir / f"conversation_{self.session_id}.json"
@@ -842,8 +841,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         conversation_data = {
             "session_id": self.session_id,
             "timestamp": datetime.now().isoformat(),
-            "messages": self.state["messages"],
-            "research_query": self.state.get("research_query"),
+            "messages": self.conversation_history,
         }
 
         with open(filepath, "w") as f:
@@ -855,48 +853,49 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         Args:
             user_input: User's message
         """
-        # Track how many messages we had before
-        messages_before = len(self.state.get("messages", []))
-
-        # Add user message to state
-        self.state["messages"].append({"role": "user", "content": user_input})
+        # Add user message to history
+        self.conversation_history.append({"role": "user", "content": user_input})
 
         try:
             # Run agent with thinking spinner
             with Status(
-                "[bold cyan]Thinking...[/bold cyan]",
+                "[bold cyan]Researching...[/bold cyan]",
                 spinner="dots",
                 console=self.console,
             ):
-                result = self.agent.invoke(self.state)
+                # LangGraph ReAct agent expects {"messages": [HumanMessage(...)]}
+                result = self.agent.invoke(
+                    {"messages": [{"role": "user", "content": user_input}]}
+                )
 
-            # Update state
-            self.state = result
-
-            # Print only NEW agent responses
-            all_messages = result.get("messages", [])
-            new_messages = all_messages[messages_before + 1 :]
-
-            if not new_messages:
+            # Extract response from LangGraph format
+            # Result format: {"messages": [HumanMessage, AIMessage, ...]}
+            messages = result.get("messages", [])
+            if not messages:
                 self.console.print(
                     "\n[yellow]No response generated. Try rephrasing your question.[/yellow]"
                 )
+                return
 
-            for msg in new_messages:
-                # Handle both dict and message objects
-                msg_role = (
-                    msg.get("role")
-                    if isinstance(msg, dict)
-                    else getattr(msg, "type", None)
-                )
-                msg_content = (
-                    msg.get("content")
-                    if isinstance(msg, dict)
-                    else getattr(msg, "content", "")
-                )
+            # Get last AI message
+            last_message = messages[-1]
+            response = (
+                last_message.content
+                if hasattr(last_message, "content")
+                else str(last_message)
+            )
 
-                if msg_role in ["assistant", "ai"]:
-                    self.print_message("assistant", msg_content)
+            if not response:
+                self.console.print(
+                    "\n[yellow]No response generated. Try rephrasing your question.[/yellow]"
+                )
+                return
+
+            # Add to history
+            self.conversation_history.append({"role": "assistant", "content": response})
+
+            # Display response
+            self.print_message("assistant", response)
 
         except Exception as e:
             self.console.print(f"\n[red]Error: {e}[/red]\n")

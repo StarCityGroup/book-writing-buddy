@@ -97,6 +97,21 @@ class BookResearchNodes:
 
 {BOOK_OUTLINE}
 
+**YOUR CAPABILITIES:**
+You have FULL ACCESS to query and retrieve data from:
+- **Zotero Library**: All research sources, annotations, highlights, and notes indexed by chapter
+- **Scrivener Manuscript**: All drafts, notes, synopses, and document structure indexed by chapter
+- **Vector Database**: 6,378+ indexed chunks enabling semantic search across all materials
+
+You can ACTIVELY QUERY this data using specialized tools to:
+- Search semantically through research materials
+- Retrieve Zotero annotations and highlights for any chapter
+- Analyze research gaps and coverage
+- Find similar or duplicate content
+- Get detailed information about specific chapters
+- Check sync status between Scrivener, Zotero, and outline
+- Compare chapters, track themes, analyze source diversity, and more
+
 Your role in the PLANNING phase is to:
 1. Understand the user's research question in the context of the book's structure
 2. Determine what type of information they need:
@@ -106,16 +121,11 @@ Your role in the PLANNING phase is to:
    - **similarity**: Checking for duplicate or similar content
 3. Briefly acknowledge what you'll look up (1-2 sentences)
 
-Available data:
-- Zotero collections organized by chapter
-- Scrivener manuscript drafts
-- All content indexed in vector database for semantic search
-
 **IMPORTANT - Handling Sync Issues:**
 The outline.txt, Zotero collections, and Scrivener chapters may be out of sync as the author revises their structure.
 - **Scrivener is the definitive source of truth** for chapter structure
 - If you encounter ambiguity or missing data, ask clarifying questions
-- If chapter numbers don't match, note this and suggest running the check-sync skill
+- If chapter numbers don't match, note this and suggest running a sync check
 - Be graceful when information is incomplete - do your best with available data
 
 Keep your response brief - just acknowledge the request. The system will automatically proceed to gather the information."""
@@ -553,8 +563,11 @@ Respond with ONLY the category name, nothing else."""
 
         # Cross-chapter theme
         if state.get("cross_chapter_theme"):
+            logger.info(f"analyze_node: formatting cross_chapter_theme data")
             context = self._format_cross_chapter_theme(state["cross_chapter_theme"])
             context_parts.append(f"## Cross-Chapter Theme Analysis\n{context}")
+        else:
+            logger.warning(f"analyze_node: no cross_chapter_theme in state. State keys: {list(state.keys())}")
 
         # Chapter comparison
         if state.get("chapter_comparison"):
@@ -598,9 +611,17 @@ Respond with ONLY the category name, nothing else."""
 
 {BOOK_OUTLINE}
 
+**YOUR CAPABILITIES:**
+You have just queried the vector database containing:
+- All Zotero research sources, annotations, and highlights indexed by chapter
+- All Scrivener manuscript drafts, notes, and structure indexed by chapter
+- 6,378+ indexed chunks enabling comprehensive analysis
+
+The data shown below was retrieved from this indexed database and represents the ACTUAL content from the author's Zotero library and Scrivener project.
+
 Your role is to:
 1. Analyze the research data provided in the context of the book's structure
-2. Answer the user's question with specific details
+2. Answer the user's question with specific details from the retrieved data
 3. Cite sources when referencing specific information
 4. Make connections between different sources and chapters
 5. Suggest where findings might fit in the book's narrative
@@ -612,7 +633,9 @@ If you notice gaps or inconsistencies (e.g., outline mentions chapters not in Zo
 - Note the discrepancy clearly
 - Work with available data - don't fail because of missing sources
 - Suggest the author may need to sync their outline/Zotero/Scrivener structure
-- Recommend using the check-sync skill to see detailed mismatches
+- Recommend running a sync check to see detailed mismatches
+
+**IMPORTANT:** When you say "I don't have access to X", you are WRONG. You have already accessed the indexed data from both Zotero and Scrivener. If something is missing, it means it hasn't been indexed yet, not that you can't access it.
 
 Be thorough but concise. Focus on actionable insights that help advance the book's argument."""
 
@@ -987,13 +1010,17 @@ Build upon your previous analysis while incorporating the new direction."""
         # Extract the theme/keyword from the query
         keyword = self._extract_theme_keyword(query)
 
+        logger.info(f"cross_chapter_theme_node: extracted keyword='{keyword}' from query='{query}'")
+
         if not keyword:
+            logger.warning("cross_chapter_theme_node: No keyword extracted")
             return {
                 "cross_chapter_theme": {"error": "No theme keyword specified"},
                 "current_phase": "analyzing",
             }
 
         results = self.rag.find_cross_chapter_themes(keyword=keyword)
+        logger.info(f"cross_chapter_theme_node: got {len(results.get('chapters', []))} chapters with theme")
 
         return {"cross_chapter_theme": results, "current_phase": "analyzing"}
 
@@ -1077,7 +1104,11 @@ Build upon your previous analysis while incorporating the new direction."""
 
         if not chapter:
             return {
-                "export_summary": {"error": "No chapter number specified"},
+                "export_summary": {
+                    "error": "No chapter number specified",
+                    "chapter": None,
+                    "summary": "",
+                },
                 "current_phase": "analyzing",
             }
 

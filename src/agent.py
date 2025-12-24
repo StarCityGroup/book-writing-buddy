@@ -120,6 +120,7 @@ def create_agent():
     workflow.add_edge("bibliography", "analyze")
     workflow.add_edge("timeline", "analyze")
     workflow.add_edge("related_research", "analyze")
+    workflow.add_edge("scrivener_summary", "analyze")
 
     # Analysis can go to refinement or end
     workflow.add_conditional_edges("analyze", route_from_analysis)

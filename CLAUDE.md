@@ -14,11 +14,49 @@ Before drafting each chapter, this tool:
 
 ## Project Structure
 
-- `analyze_chapter.py` - Main interactive script with TUI pickers
+- `main.py` - TUI agent entry point
 - `config/` - Project configuration files
-- `output/` - Generated markdown analyses
-- `.claude/skills/` - **Claude Code skills (project-specific)**
+- `src/` - Source code (agent, tools, indexing, etc.)
+- `scripts/` - **Working scripts and utilities**
+- `docs/` - **Documentation, architecture diagrams, migration notes**
+- `data/` - Data files (outline.txt, vector database)
 - `CLAUDE.md` - This file (project context and instructions)
+
+## File Organization Rules
+
+**IMPORTANT**: Keep the root directory clean!
+
+### Where to Put Files
+
+- **Working scripts** → `scripts/`
+  - Example: `test_agent.py`, `debug_tools.py`, `benchmark.py`
+  - Temporary utility scripts, test scripts, debugging tools
+
+- **Documentation & reports** → `docs/`
+  - Example: `ARCHITECTURE_V2.md`, `MIGRATION_COMPLETE.md`, `WORKFLOW_FIXES.md`
+  - Architecture diagrams, migration notes, design decisions, analysis reports
+  - Markdown files explaining how things work
+
+- **Source code** → `src/`
+  - Core application code, modules, libraries
+
+- **Configuration** → `config/` or root `.env`
+  - Settings files, environment configuration
+
+- **Data files** → `data/`
+  - Outline files, project-specific data
+  - NOT the vector database (that's in `data/qdrant_storage/`)
+
+### Do NOT Create in Root
+
+❌ `WORKFLOW_FIXES.md` → ✅ `docs/WORKFLOW_FIXES.md`
+❌ `test_script.py` → ✅ `scripts/test_script.py`
+❌ `debug_agent.py` → ✅ `scripts/debug_agent.py`
+
+The only markdown files allowed in root are:
+- `README.md` (project overview)
+- `CLAUDE.md` (this file)
+- `LICENSE.md`
 
 ## Data Sources
 
