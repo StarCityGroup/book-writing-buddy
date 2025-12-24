@@ -90,17 +90,21 @@ class ScrivenerIndexer:
 
             if uuid:
                 # Determine chapter title
-                # If this item has a chapter number, it's a chapter folder - use its title
-                # Otherwise, inherit the chapter title from parent
                 # Note: Check "is not None" because chapter_num can be 0 (Preface)
                 if chapter_num is not None and is_folder:
+                    # Chapter folder - use its title
                     chapter_title = title
                 elif chapter_num is not None and not is_folder:
-                    # Single document with chapter number (like Preface) - use its title
-                    chapter_title = title
+                    # Document with chapter number
+                    if parent_info and parent_info.get("is_folder"):
+                        # Nested doc inside chapter folder - inherit folder's title
+                        chapter_title = parent_info.get("chapter_title", title)
+                    else:
+                        # Standalone chapter doc (like Preface) - use its own title
+                        chapter_title = title
                 elif parent_info:
+                    # No chapter number - inherit from parent
                     chapter_title = parent_info.get("chapter_title", title)
-                    # Also inherit chapter number if not set
                     if chapter_num is None:
                         chapter_num = parent_info.get("chapter_number")
                 else:
@@ -234,8 +238,15 @@ class ScrivenerIndexer:
                 {"text": chunk.text, "metadata": chunk.metadata} for chunk in chunks
             ]
 
-            # Index
-            return self.vectordb.index_chunks(chunk_dicts)
+            # Index with error handling for embedding issues
+            try:
+                return self.vectordb.index_chunks(chunk_dicts)
+            except Exception as embed_error:
+                # Encoding/embedding errors - skip this document
+                logger.warning(
+                    f"Skipping {rtf_path.name} due to embedding error: {embed_error}"
+                )
+                return 0
 
         except Exception as e:
             logger.error(f"Failed to process {rtf_path}: {e}")
