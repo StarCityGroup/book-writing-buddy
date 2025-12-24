@@ -88,9 +88,9 @@ class SyncChecker:
             Dict mapping chapter number to metadata
         """
         try:
-            # Query Qdrant for all indexed Zotero content
+            # Query Qdrant for ALL indexed Zotero content (no limit)
             results = self.qdrant.query_by_metadata(
-                filter_dict={"source_type": "zotero"}, limit=1000
+                filter_dict={"source_type": "zotero"}, limit=None
             )
 
             chapters = {}
@@ -117,9 +117,9 @@ class SyncChecker:
             Dict mapping chapter number to metadata
         """
         try:
-            # Query Qdrant for all indexed Scrivener content
+            # Query Qdrant for ALL indexed Scrivener content (no limit)
             results = self.qdrant.query_by_metadata(
-                filter_dict={"source_type": "scrivener"}, limit=1000
+                filter_dict={"source_type": "scrivener"}, limit=None
             )
 
             chapters = {}

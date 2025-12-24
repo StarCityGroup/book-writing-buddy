@@ -274,6 +274,72 @@ class VectorDBClient:
             for result in results
         ]
 
+    def query_by_metadata(
+        self, filter_dict: Dict[str, Any], limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Query points by metadata filters using scroll API (efficient for large result sets).
+
+        Args:
+            filter_dict: Metadata filters (e.g., {'source_type': 'zotero'})
+            limit: Maximum number of results (None = all results)
+
+        Returns:
+            List of dicts with 'id', 'metadata', 'text'
+        """
+        # Build Qdrant filter
+        conditions = []
+        for key, value in filter_dict.items():
+            conditions.append(FieldCondition(key=key, match=MatchValue(value=value)))
+
+        qdrant_filter = Filter(must=conditions) if conditions else None
+
+        # Use scroll API to retrieve ALL points efficiently
+        results = []
+        offset = None
+        batch_size = 100  # Scroll in batches
+
+        while True:
+            batch, next_offset = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=qdrant_filter,
+                limit=batch_size,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,  # Don't need vectors, just metadata
+            )
+
+            if not batch:
+                break
+
+            # Format results
+            for point in batch:
+                results.append(
+                    {
+                        "id": str(point.id),
+                        "metadata": {
+                            k: v for k, v in point.payload.items() if k != "text"
+                        },
+                        "text": point.payload.get("text", ""),
+                    }
+                )
+
+            # Check if we've hit the limit
+            if limit and len(results) >= limit:
+                results = results[:limit]
+                break
+
+            # Continue scrolling
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        logger.debug(
+            f"Retrieved {len(results)} points with filter {filter_dict} "
+            f"(limit={limit or 'unlimited'})"
+        )
+        return results
+
     def delete_by_filter(self, filters: Dict[str, Any]) -> bool:
         """
         Delete points matching filters.

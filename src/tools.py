@@ -30,28 +30,46 @@ def get_rag() -> BookRAG:
 
 @tool
 def search_research(
-    query: str, chapter: Optional[int] = None, limit: int = 20
+    query: str,
+    chapter: Optional[int] = None,
+    source_type: Optional[str] = None,
+    limit: int = 20,
 ) -> dict:
     """Search semantically through research materials.
 
-    Use this to find relevant information from Zotero sources and Scrivener drafts.
+    Use this to find relevant information from Zotero sources and/or Scrivener drafts.
 
     Args:
         query: What to search for (e.g., "infrastructure failure", "heat adaptation")
         chapter: Optional chapter number to limit search (e.g., 9)
+        source_type: Optional source filter - "zotero" (research papers only),
+                     "scrivener" (manuscript drafts only), or None (both)
         limit: Maximum results to return (default 20)
 
     Returns:
         Dict with search results including text, sources, and relevance scores
     """
     rag = get_rag()
-    filters = {"chapter_number": chapter} if chapter else None
-    results = rag.search(query=query, filters=filters, limit=limit, score_threshold=0.6)
+
+    # Build filters
+    filters = {}
+    if chapter:
+        filters["chapter_number"] = chapter
+    if source_type:
+        filters["source_type"] = source_type
+
+    results = rag.search(
+        query=query,
+        filters=filters if filters else None,
+        limit=limit,
+        score_threshold=0.6,
+    )
 
     # Format for easy consumption
     return {
         "query": query,
         "chapter_filter": chapter,
+        "source_type_filter": source_type or "all (zotero + scrivener)",
         "result_count": len(results),
         "results": [
             {
