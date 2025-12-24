@@ -1195,6 +1195,26 @@ class BookRAG:
         Returns:
             Dict with Scrivener indexing statistics per chapter
         """
+        # Get canonical chapter titles from parser
+        import os
+        from pathlib import Path
+        from .scrivener_parser import ScrivenerParser
+
+        scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
+        manuscript_folder = os.getenv("SCRIVENER_MANUSCRIPT_FOLDER")
+
+        chapter_titles_map = {}
+        if scrivener_path:
+            try:
+                parser = ScrivenerParser(scrivener_path, manuscript_folder=manuscript_folder or None)
+                structure = parser.get_chapter_structure()
+                for ch in structure.get("chapters", []):
+                    chapter_titles_map[ch["number"]] = ch["title"]
+            except Exception as e:
+                import structlog
+                logger = structlog.get_logger()
+                logger.warning(f"Could not load chapter titles from parser: {e}")
+
         # Use scroll instead of search to get ALL Scrivener documents
         from qdrant_client.models import Filter, FieldCondition, MatchValue
 
@@ -1246,7 +1266,7 @@ class BookRAG:
                 if chapter_num not in chapters:
                     chapters[chapter_num] = {
                         "chapter_number": chapter_num,
-                        "chapter_title": meta.get("chapter_title", "Unknown"),
+                        "chapter_title": chapter_titles_map.get(chapter_num, meta.get("chapter_title", "Unknown")),
                         "total_chunks": 0,
                         "total_words": 0,
                         "doc_types": {},
