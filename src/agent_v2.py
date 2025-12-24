@@ -10,7 +10,7 @@ import structlog
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
-from .tools import ALL_TOOLS
+from .tools import ALL_TOOLS, initialize_rag
 
 logger = structlog.get_logger()
 
@@ -175,6 +175,10 @@ def create_research_agent():
     llm = ChatOpenAI(
         model=model_name, base_url=litellm_url, api_key=litellm_key, temperature=0.7
     )
+
+    # Pre-initialize RAG to avoid parallel initialization race conditions
+    # This loads the embedding model once before any tools are called
+    initialize_rag()
 
     # Create ReAct agent using LangGraph prebuilt
     # This automatically handles the ReAct loop with tool calling

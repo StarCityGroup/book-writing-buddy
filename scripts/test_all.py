@@ -62,7 +62,7 @@ def test_context_loading():
     print("=" * 60)
 
     try:
-        from src.nodes import load_book_context
+        from src.agent_v2 import load_book_context
 
         context = load_book_context()
 

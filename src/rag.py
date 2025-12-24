@@ -125,19 +125,19 @@ class BookRAG:
                 # Filter by collection matching chapter number
                 query = """
                     SELECT DISTINCT
-                        ia.annotationType,
-                        ia.annotationText,
-                        ia.annotationComment,
-                        ia.annotationColor,
+                        ia.type as annotationType,
+                        ia.text as annotationText,
+                        ia.comment as annotationComment,
+                        ia.color as annotationColor,
                         parent.itemID as parentItemID,
-                        COALESCE(parentData.value, 'Unknown') as parentTitle,
+                        COALESCE(idv.value, 'Unknown') as parentTitle,
                         coll.collectionName
                     FROM itemAnnotations ia
                     JOIN items annot ON ia.itemID = annot.itemID
                     JOIN items parent ON ia.parentItemID = parent.itemID
                     LEFT JOIN itemData parentData ON parent.itemID = parentData.itemID
                         AND parentData.fieldID = (SELECT fieldID FROM fields WHERE fieldName = 'title')
-                    LEFT JOIN itemDataValues ON parentData.valueID = itemDataValues.valueID
+                    LEFT JOIN itemDataValues idv ON parentData.valueID = idv.valueID
                     LEFT JOIN collectionItems ci ON parent.itemID = ci.itemID
                     LEFT JOIN collections coll ON ci.collectionID = coll.collectionID
                     WHERE coll.collectionName LIKE ?
@@ -149,19 +149,19 @@ class BookRAG:
                 # Get all annotations
                 query = """
                     SELECT DISTINCT
-                        ia.annotationType,
-                        ia.annotationText,
-                        ia.annotationComment,
-                        ia.annotationColor,
+                        ia.type as annotationType,
+                        ia.text as annotationText,
+                        ia.comment as annotationComment,
+                        ia.color as annotationColor,
                         parent.itemID as parentItemID,
-                        COALESCE(parentData.value, 'Unknown') as parentTitle,
+                        COALESCE(idv.value, 'Unknown') as parentTitle,
                         COALESCE(coll.collectionName, 'No Collection') as collectionName
                     FROM itemAnnotations ia
                     JOIN items annot ON ia.itemID = annot.itemID
                     JOIN items parent ON ia.parentItemID = parent.itemID
                     LEFT JOIN itemData parentData ON parent.itemID = parentData.itemID
                         AND parentData.fieldID = (SELECT fieldID FROM fields WHERE fieldName = 'title')
-                    LEFT JOIN itemDataValues ON parentData.valueID = itemDataValues.valueID
+                    LEFT JOIN itemDataValues idv ON parentData.valueID = idv.valueID
                     LEFT JOIN collectionItems ci ON parent.itemID = ci.itemID
                     LEFT JOIN collections coll ON ci.collectionID = coll.collectionID
                     ORDER BY parent.itemID, annot.dateAdded
@@ -504,8 +504,7 @@ class BookRAG:
 
         try:
             parser = ScrivenerParser(
-                scrivener_path,
-                manuscript_folder=scrivener_manuscript_folder or None
+                scrivener_path, manuscript_folder=scrivener_manuscript_folder or None
             )
             structure = parser.get_chapter_structure()
             return {
@@ -1197,7 +1196,7 @@ class BookRAG:
         """
         # Get canonical chapter titles from parser
         import os
-        from pathlib import Path
+
         from .scrivener_parser import ScrivenerParser
 
         scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
@@ -1206,20 +1205,25 @@ class BookRAG:
         chapter_titles_map = {}
         if scrivener_path:
             try:
-                parser = ScrivenerParser(scrivener_path, manuscript_folder=manuscript_folder or None)
+                parser = ScrivenerParser(
+                    scrivener_path, manuscript_folder=manuscript_folder or None
+                )
                 structure = parser.get_chapter_structure()
                 for ch in structure.get("chapters", []):
                     chapter_titles_map[ch["number"]] = ch["title"]
             except Exception as e:
                 import structlog
+
                 logger = structlog.get_logger()
                 logger.warning(f"Could not load chapter titles from parser: {e}")
 
         # Use scroll instead of search to get ALL Scrivener documents
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
 
         scroll_filter = Filter(
-            must=[FieldCondition(key="source_type", match=MatchValue(value="scrivener"))]
+            must=[
+                FieldCondition(key="source_type", match=MatchValue(value="scrivener"))
+            ]
         )
 
         # Scroll through all Scrivener points
@@ -1266,7 +1270,9 @@ class BookRAG:
                 if chapter_num not in chapters:
                     chapters[chapter_num] = {
                         "chapter_number": chapter_num,
-                        "chapter_title": chapter_titles_map.get(chapter_num, meta.get("chapter_title", "Unknown")),
+                        "chapter_title": chapter_titles_map.get(
+                            chapter_num, meta.get("chapter_title", "Unknown")
+                        ),
                         "total_chunks": 0,
                         "total_words": 0,
                         "doc_types": {},

@@ -44,10 +44,10 @@ class AnnotationAggregator:
         # Zotero stores annotations in itemAnnotations table
         query = """
             SELECT
-                ia.annotationText,
-                ia.annotationComment,
-                ia.annotationColor,
-                ia.annotationType,
+                ia.text as annotationText,
+                ia.comment as annotationComment,
+                ia.color as annotationColor,
+                ia.type as annotationType,
                 i.itemID,
                 pi.itemID as parentItemID,
                 COALESCE(title_val.value, 'Untitled') as parent_title

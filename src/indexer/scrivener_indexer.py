@@ -65,7 +65,9 @@ class ScrivenerIndexer:
         # Parse Scrivener structure to get accurate chapter mapping
         self.uuid_to_chapter = {}
         try:
-            parser = ScrivenerParser(str(scrivener_path), manuscript_folder=manuscript_folder)
+            parser = ScrivenerParser(
+                str(scrivener_path), manuscript_folder=manuscript_folder
+            )
             structure = parser.get_chapter_structure()
             self._build_uuid_mapping(structure.get("structure", []))
             logger.info(
@@ -262,8 +264,8 @@ class ScrivenerIndexer:
             return "notes"
 
         # Split into lines and paragraphs
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
+        paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
 
         if len(lines) == 0:
             return "notes"
@@ -271,7 +273,9 @@ class ScrivenerIndexer:
         # Calculate text structure metrics
         total_chars = len(text.strip())
         avg_line_length = sum(len(line) for line in lines) / len(lines)
-        avg_para_length = sum(len(p) for p in paragraphs) / len(paragraphs) if paragraphs else 0
+        avg_para_length = (
+            sum(len(p) for p in paragraphs) / len(paragraphs) if paragraphs else 0
+        )
 
         # Count indicators of fragmentary text
         fragment_indicators = 0
@@ -286,14 +290,15 @@ class ScrivenerIndexer:
             fragment_indicators += 1
 
         # 3. Bullet point indicators (-, *, •, numbers)
-        bullet_pattern = r'^\s*[-*•]\s+|^\s*\d+[\.)]\s+'
+        bullet_pattern = r"^\s*[-*•]\s+|^\s*\d+[\.)]\s+"
         import re
+
         bullet_lines = sum(1 for line in lines if re.match(bullet_pattern, line))
         if bullet_lines / len(lines) > 0.2:  # More than 20% bullets
             fragment_indicators += 1
 
         # 4. URLs present (research/reference material)
-        url_pattern = r'https?://|www\.|\.com|\.org|\.edu|\.gov'
+        url_pattern = r"https?://|www\.|\.com|\.org|\.edu|\.gov"
         url_matches = re.findall(url_pattern, text, re.IGNORECASE)
         if len(url_matches) >= 3:  # 3+ URLs suggests notes/references
             fragment_indicators += 1

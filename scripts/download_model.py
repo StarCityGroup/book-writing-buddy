@@ -27,7 +27,7 @@ def download_model():
 
     # Test the model
     test_embedding = model.encode(["test sentence"])
-    print(f"✓ Model downloaded successfully!")
+    print("✓ Model downloaded successfully!")
     print(f"✓ Embedding dimension: {test_embedding.shape[1]}")
     print(f"✓ Cached at: {CACHE_DIR}")
 

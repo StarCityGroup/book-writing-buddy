@@ -4,6 +4,7 @@ Vector database client wrapper for Qdrant.
 Handles embeddings storage, retrieval, and search operations.
 """
 
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -63,6 +64,7 @@ class VectorDBClient:
         # Store embedding model name for lazy loading
         self.embedding_model_name = embedding_model
         self._embedder = None  # Lazy-loaded on first use
+        self._embedder_lock = threading.Lock()  # Thread-safe lazy loading
         self._dimensions_verified = False
 
         # Create collection if it doesn't exist
@@ -73,24 +75,30 @@ class VectorDBClient:
 
     @property
     def embedder(self):
-        """Lazy-load the embedding model on first access."""
+        """Lazy-load the embedding model on first access (thread-safe)."""
         if self._embedder is None:
-            if self.model_cache_dir:
-                logger.info(
-                    f"Loading embedding model: {self.embedding_model_name} "
-                    f"(from cache: {self.model_cache_dir})"
-                )
-                self._embedder = SentenceTransformer(
-                    self.embedding_model_name, cache_folder=self.model_cache_dir
-                )
-            else:
-                logger.info(f"Loading embedding model: {self.embedding_model_name}")
-                self._embedder = SentenceTransformer(self.embedding_model_name)
+            with self._embedder_lock:
+                # Double-check pattern to prevent race conditions
+                if self._embedder is None:
+                    if self.model_cache_dir:
+                        logger.info(
+                            f"Loading embedding model: {self.embedding_model_name} "
+                            f"(from cache: {self.model_cache_dir})"
+                        )
+                        self._embedder = SentenceTransformer(
+                            self.embedding_model_name,
+                            cache_folder=self.model_cache_dir,
+                        )
+                    else:
+                        logger.info(
+                            f"Loading embedding model: {self.embedding_model_name}"
+                        )
+                        self._embedder = SentenceTransformer(self.embedding_model_name)
 
-            # Verify dimensions on first load
-            if not self._dimensions_verified:
-                self._verify_embedding_dimensions()
-                self._dimensions_verified = True
+                    # Verify dimensions on first load
+                    if not self._dimensions_verified:
+                        self._verify_embedding_dimensions()
+                        self._dimensions_verified = True
 
         return self._embedder
 
@@ -469,7 +477,7 @@ class VectorDBClient:
         Returns:
             True if timestamps were backfilled, False otherwise
         """
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         # Check if we have data but no timestamps
         info = self.get_collection_info()

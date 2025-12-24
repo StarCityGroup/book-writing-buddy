@@ -4,23 +4,36 @@ These tools wrap BookRAG methods and provide direct access to the vector databas
 and research capabilities. The agent can use these flexibly to gather information.
 """
 
+import threading
 from typing import Optional
 
 from langchain_core.tools import tool
 
 from .rag import BookRAG
 
-
-# Initialize RAG instance (shared across all tools)
+# Thread-safe singleton for RAG instance
 _rag_instance = None
+_rag_lock = threading.Lock()
 
 
 def get_rag() -> BookRAG:
-    """Get or create shared RAG instance."""
+    """Get or create shared RAG instance (thread-safe)."""
     global _rag_instance
     if _rag_instance is None:
-        _rag_instance = BookRAG()
+        with _rag_lock:
+            # Double-check pattern to prevent race conditions
+            if _rag_instance is None:
+                _rag_instance = BookRAG()
     return _rag_instance
+
+
+def initialize_rag() -> None:
+    """Pre-initialize RAG instance before agent starts.
+
+    Call this once during application startup to avoid race conditions
+    when tools execute in parallel.
+    """
+    get_rag()  # Trigger initialization
 
 
 # =============================================================================

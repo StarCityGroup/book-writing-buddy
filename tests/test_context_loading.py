@@ -7,7 +7,7 @@ from pathlib import Path
 def test_context_loading():
     """Test loading book context from both sources."""
     # Import after setting environment
-    from src.nodes import load_book_context
+    from src.agent_v2 import load_book_context
 
     print("\n🧪 Testing Context Loading\n")
 
@@ -50,7 +50,7 @@ def test_context_with_missing_files():
         outline_path.rename(backup_path)
 
     try:
-        from src.nodes import load_book_context
+        from src.agent_v2 import load_book_context
 
         context = load_book_context()
 

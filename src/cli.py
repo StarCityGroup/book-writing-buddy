@@ -15,7 +15,7 @@ from rich.prompt import Prompt
 from rich.status import Status
 
 from .agent_v2 import create_research_agent
-from .rag import BookRAG
+from .tools import get_rag
 
 
 class BookResearchChatCLI:
@@ -90,7 +90,7 @@ class BookResearchChatCLI:
         self.console.print("[dim]Checking Qdrant vector database...[/dim]")
 
         try:
-            self.rag = BookRAG()
+            self.rag = get_rag()
 
             # Backfill timestamps if needed (for data indexed before timestamp feature)
             self.rag.vectordb.backfill_timestamps_if_needed()
@@ -795,8 +795,8 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 
             self.console.print("\n[bold green]✓ Re-indexing complete![/bold green]\n")
 
-            # Refresh RAG instance
-            self.rag = BookRAG()
+            # Refresh RAG instance (uses singleton)
+            self.rag = get_rag()
 
         except FileNotFoundError as e:
             self.console.print(f"\n[red]✗ Configuration file not found: {e}[/red]\n")
@@ -863,10 +863,8 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                 spinner="dots",
                 console=self.console,
             ):
-                # LangGraph ReAct agent expects {"messages": [HumanMessage(...)]}
-                result = self.agent.invoke(
-                    {"messages": [{"role": "user", "content": user_input}]}
-                )
+                # LangGraph ReAct agent expects {"messages": [...]} with full history
+                result = self.agent.invoke({"messages": self.conversation_history})
 
             # Extract response from LangGraph format
             # Result format: {"messages": [HumanMessage, AIMessage, ...]}

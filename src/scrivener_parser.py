@@ -52,7 +52,9 @@ class ScrivenerParser:
 
         # Filter by manuscript folder if specified
         if self.manuscript_folder:
-            structure = self._filter_by_manuscript_folder(structure, self.manuscript_folder)
+            structure = self._filter_by_manuscript_folder(
+                structure, self.manuscript_folder
+            )
             # After filtering, assign sequential chapter numbers
             structure = self._assign_sequential_chapters(structure)
 
@@ -267,7 +269,9 @@ class ScrivenerParser:
 
                 # Recurse into children
                 if "children" in item:
-                    recurse(item["children"], parent_title=title, parent_is_part=is_part)
+                    recurse(
+                        item["children"], parent_title=title, parent_is_part=is_part
+                    )
 
         recurse(structure)
 
