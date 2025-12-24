@@ -1195,15 +1195,31 @@ class BookRAG:
         Returns:
             Dict with Scrivener indexing statistics per chapter
         """
-        # Get all Scrivener results
-        results = self.search(
-            query="scrivener content",
-            filters={"source_type": "scrivener"},
-            limit=10000,
-            score_threshold=0.0,
+        # Use scroll instead of search to get ALL Scrivener documents
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+        scroll_filter = Filter(
+            must=[FieldCondition(key="source_type", match=MatchValue(value="scrivener"))]
         )
 
-        if not results:
+        # Scroll through all Scrivener points
+        all_results = []
+        offset = None
+        while True:
+            points, offset = self.vectordb.client.scroll(
+                collection_name="book_research",
+                scroll_filter=scroll_filter,
+                limit=100,
+                offset=offset,
+                with_payload=True,
+            )
+            if not points:
+                break
+            all_results.extend(points)
+            if offset is None:
+                break
+
+        if not all_results:
             return {
                 "total_documents": 0,
                 "total_chunks": 0,
@@ -1217,14 +1233,16 @@ class BookRAG:
         unassigned_docs = []
         total_words = 0
 
-        for result in results:
-            meta = result["metadata"]
+        for point in all_results:
+            meta = point.payload
+            text = meta.get("text", "")
             chapter_num = meta.get("chapter_number")
             doc_type = meta.get("doc_type", "unknown")
-            word_count = len(result["text"].split())
+            word_count = len(text.split())
             total_words += word_count
 
-            if chapter_num:
+            # Use "is not None" because chapter_num can be 0 (Preface)
+            if chapter_num is not None:
                 if chapter_num not in chapters:
                     chapters[chapter_num] = {
                         "chapter_number": chapter_num,
@@ -1266,7 +1284,7 @@ class BookRAG:
 
         return {
             "total_chapters": len(chapter_list),
-            "total_chunks": len(results),
+            "total_chunks": len(all_results),
             "total_words": total_words,
             "total_documents": sum(ch["document_count"] for ch in chapter_list),
             "chapters": chapter_list,
