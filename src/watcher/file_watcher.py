@@ -128,7 +128,7 @@ class FileWatcherDaemon:
         self.scrivener_handler = DebounceHandler(
             callback=self._handle_scrivener_changes,
             debounce_seconds=config["indexing"]["debounce_seconds"],
-            patterns={"*.rtf", "*.txt"},
+            patterns={"*.rtf", "*.txt", "*.scrivx"},
         )
 
     def start(self):
@@ -189,13 +189,33 @@ class FileWatcherDaemon:
 
     def _handle_scrivener_changes(self, changed_paths: list):
         """Handle Scrivener file changes"""
-        logger.info(f"Re-indexing {len(changed_paths)} Scrivener files")
+        logger.info(f"Processing {len(changed_paths)} Scrivener file changes")
 
-        # Re-index changed documents
-        for path in changed_paths:
+        # Check if .scrivx structure file changed
+        scrivx_changed = any(str(path).endswith(".scrivx") for path in changed_paths)
+
+        if scrivx_changed:
+            # Structure changed - run full sync to detect moves/deletions
+            logger.info("Scrivener structure file (.scrivx) changed, running full sync")
             try:
-                self.scrivener_indexer._index_document(Path(path))
+                # Check if sync method exists (added in Phase 5)
+                if hasattr(self.scrivener_indexer, "sync"):
+                    self.scrivener_indexer.sync()
+                else:
+                    # Fallback to re-indexing all (less efficient)
+                    logger.warning(
+                        "Sync method not available, falling back to full re-index"
+                    )
+                    self.scrivener_indexer.index_all()
             except Exception as e:
-                logger.error(f"Failed to re-index {path}: {e}")
+                logger.error(f"Failed to sync Scrivener: {e}", exc_info=True)
+        else:
+            # Only content files changed - do fast incremental re-indexing
+            logger.info(f"Re-indexing {len(changed_paths)} Scrivener content files")
+            for path in changed_paths:
+                try:
+                    self.scrivener_indexer._index_document(Path(path))
+                except Exception as e:
+                    logger.error(f"Failed to re-index {path}: {e}")
 
-        logger.info("Scrivener re-indexing complete")
+        logger.info("Scrivener change handling complete")

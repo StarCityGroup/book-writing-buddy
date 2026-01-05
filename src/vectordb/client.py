@@ -383,6 +383,84 @@ class VectorDBClient:
         """
         return self.delete_by_filter({"source_type": source_type})
 
+    def delete_by_scrivener_id(self, scrivener_id: str) -> int:
+        """
+        Delete all chunks for a specific Scrivener document UUID.
+
+        Args:
+            scrivener_id: Scrivener document UUID
+
+        Returns:
+            Number of points deleted (approximate, Qdrant doesn't return exact count)
+        """
+        # Count before deletion (for logging)
+        before_count = len(
+            self.query_by_metadata(
+                {"source_type": "scrivener", "scrivener_id": scrivener_id}, limit=10000
+            )
+        )
+
+        # Delete the points
+        self.delete_by_filter(
+            {"source_type": "scrivener", "scrivener_id": scrivener_id}
+        )
+
+        logger.info(f"Deleted ~{before_count} chunks for scrivener_id={scrivener_id}")
+        return before_count
+
+    def get_all_scrivener_ids(self) -> set:
+        """
+        Get all unique scrivener_id values from the vector database.
+
+        Returns:
+            Set of scrivener_id strings
+        """
+        # Query all scrivener documents (no limit)
+        results = self.query_by_metadata({"source_type": "scrivener"}, limit=None)
+
+        # Extract unique scrivener_ids
+        scrivener_ids = {
+            result["metadata"].get("scrivener_id")
+            for result in results
+            if result["metadata"].get("scrivener_id")
+        }
+
+        logger.debug(f"Found {len(scrivener_ids)} unique scrivener IDs in vector DB")
+        return scrivener_ids
+
+    def delete_orphaned_scrivener_docs(self, valid_ids: set) -> int:
+        """
+        Delete all Scrivener chunks whose IDs are not in the valid set.
+
+        Args:
+            valid_ids: Set of scrivener_id values that should exist
+
+        Returns:
+            Number of documents deleted
+        """
+        # Get all indexed IDs
+        indexed_ids = self.get_all_scrivener_ids()
+
+        # Find orphans (in DB but not in filesystem)
+        orphaned_ids = indexed_ids - valid_ids
+
+        if not orphaned_ids:
+            logger.info("No orphaned Scrivener documents found")
+            return 0
+
+        logger.info(
+            f"Found {len(orphaned_ids)} orphaned Scrivener documents, deleting..."
+        )
+
+        # Delete each orphaned document
+        total_deleted = 0
+        for scrivener_id in orphaned_ids:
+            deleted = self.delete_by_scrivener_id(scrivener_id)
+            total_deleted += deleted
+
+        logger.info(f"Deleted {total_deleted} orphaned chunks total")
+        return len(orphaned_ids)
+
     def get_collection_info(self) -> Dict[str, Any]:
         """Get collection statistics"""
         info = self.client.get_collection(self.collection_name)

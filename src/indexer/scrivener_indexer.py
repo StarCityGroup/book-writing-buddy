@@ -4,6 +4,8 @@ Scrivener project indexer.
 Parses .scriv bundle structure and indexes documents for semantic search.
 """
 
+import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -126,13 +128,20 @@ class ScrivenerIndexer:
                     current_info = self.uuid_to_chapter[uuid]
                     self._build_uuid_mapping(item["children"], parent_info=current_info)
 
-    def index_all(self) -> Dict[str, int]:
+    def index_all(self, use_sync: bool = False) -> Dict[str, int]:
         """
         Index entire Scrivener project.
+
+        Args:
+            use_sync: If True, use smart sync to detect changes instead of blind re-indexing
 
         Returns:
             Dict with stats (documents_indexed, chunks_indexed)
         """
+        if use_sync:
+            # Use sync mode (detects and applies only changes)
+            return self.sync()
+
         stats = {"documents_indexed": 0, "chunks_indexed": 0}
 
         # Index all RTF files in Files/Data
@@ -155,8 +164,38 @@ class ScrivenerIndexer:
         )
 
         # Update index timestamp (use UTC)
-        from datetime import datetime, timezone
+        timestamp = datetime.now(timezone.utc).isoformat()
+        self.vectordb.set_index_timestamp("scrivener", timestamp)
 
+        return stats
+
+    def sync(self) -> Dict[str, int]:
+        """
+        Sync Scrivener project with vector DB using smart change detection.
+
+        Detects and applies only changes (new, modified, deleted, moved documents).
+        More efficient than full re-indexing.
+
+        Returns:
+            Dict with stats (new_indexed, modified_indexed, deleted, moved_updated)
+        """
+        # Import here to avoid circular dependency
+        from .scrivener_sync import ScrivenerSyncDetector
+
+        logger.info("Starting Scrivener sync (smart change detection)...")
+
+        # Create sync detector
+        detector = ScrivenerSyncDetector(
+            indexer=self,
+            vectordb=self.vectordb,
+            scrivener_path=str(self.scrivener_path),
+            manuscript_folder=self.manuscript_folder,
+        )
+
+        # Run sync
+        stats = detector.sync()
+
+        # Update index timestamp
         timestamp = datetime.now(timezone.utc).isoformat()
         self.vectordb.set_index_timestamp("scrivener", timestamp)
 
@@ -176,6 +215,18 @@ class ScrivenerIndexer:
         # to map folder structure
         logger.warning("Folder-specific indexing not yet implemented")
         return 0
+
+    def _compute_content_hash(self, text: str) -> str:
+        """
+        Compute MD5 hash of content for change detection.
+
+        Args:
+            text: Plain text content
+
+        Returns:
+            MD5 hash as hex string
+        """
+        return hashlib.md5(text.encode("utf-8")).hexdigest()
 
     def _index_document(self, rtf_path: Path) -> int:
         """Index a single Scrivener document"""
@@ -204,12 +255,21 @@ class ScrivenerIndexer:
             if self.manuscript_folder and scrivener_uuid not in self.uuid_to_chapter:
                 return 0
 
+            # Get file stats for change tracking
+            file_stat = rtf_path.stat()
+            file_mtime = file_stat.st_mtime
+            content_hash = self._compute_content_hash(text)
+            indexed_at = datetime.now(timezone.utc).isoformat()
+
             # Build metadata
             metadata = {
                 "source_type": "scrivener",
                 "file_path": str(rtf_path),
                 "doc_type": doc_type,
                 "scrivener_id": scrivener_uuid,
+                "content_hash": content_hash,
+                "file_mtime": file_mtime,
+                "indexed_at": indexed_at,
             }
 
             # Get chapter info from UUID mapping (preferred) or fall back to guessing
