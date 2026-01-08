@@ -79,6 +79,21 @@ class ScrivenerIndexer:
             logger.warning(f"Could not parse Scrivener structure: {e}")
             logger.warning("Will fall back to guessing chapter numbers from content")
 
+    def reload_structure(self):
+        """Reload Scrivener structure to pick up new/moved documents."""
+        try:
+            parser = ScrivenerParser(
+                str(self.scrivener_path), manuscript_folder=self.manuscript_folder
+            )
+            structure = parser.get_chapter_structure()
+            self.uuid_to_chapter = {}
+            self._build_uuid_mapping(structure.get("structure", []))
+            logger.info(
+                f"Reloaded Scrivener structure: {len(self.uuid_to_chapter)} documents mapped"
+            )
+        except Exception as e:
+            logger.warning(f"Could not reload Scrivener structure: {e}")
+
     def _build_uuid_mapping(self, items, parent_info=None):
         """Recursively build UUID to chapter metadata mapping.
 

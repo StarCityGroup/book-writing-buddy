@@ -11,7 +11,7 @@ from typing import Any, Dict, Set
 
 import structlog
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
-from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver as Observer
 
 from ..indexer import ScrivenerIndexer, ZoteroIndexer
 
@@ -61,6 +61,23 @@ class DebounceHandler(FileSystemEventHandler):
     def on_created(self, event: FileSystemEvent):
         """Handle file creation"""
         self.on_modified(event)
+
+    def on_deleted(self, event: FileSystemEvent):
+        """Handle file deletion"""
+        if event.is_directory:
+            return
+
+        path = Path(event.src_path)
+
+        # Check if file matches patterns
+        if not self._matches_pattern(path):
+            return
+
+        # Record deletion
+        self.pending_changes[path] = time.time()
+        self.last_change_time[path] = time.time()
+
+        logger.debug(f"File deleted: {path}")
 
     def check_and_process(self):
         """Check for settled changes and process them"""
@@ -146,7 +163,7 @@ class FileWatcherDaemon:
         else:
             logger.warning(f"Zotero storage not found: {zotero_storage}")
 
-        # Watch Scrivener Files/Data directory
+        # Watch Scrivener Files/Data directory (content files)
         scrivener_data = self.scrivener_indexer.files_path
         if scrivener_data.exists():
             observer = Observer()
@@ -158,6 +175,19 @@ class FileWatcherDaemon:
             logger.info(f"Watching Scrivener data: {scrivener_data}")
         else:
             logger.warning(f"Scrivener data not found: {scrivener_data}")
+
+        # Watch Scrivener root directory (for .scrivx structure file changes)
+        scrivener_root = self.scrivener_indexer.scrivener_path
+        if scrivener_root.exists():
+            observer = Observer()
+            observer.schedule(
+                self.scrivener_handler, str(scrivener_root), recursive=False
+            )
+            observer.start()
+            self.observers.append(observer)
+            logger.info(f"Watching Scrivener root: {scrivener_root}")
+        else:
+            logger.warning(f"Scrivener root not found: {scrivener_root}")
 
         # Run debounce check loop
         try:
@@ -194,9 +224,16 @@ class FileWatcherDaemon:
         # Check if .scrivx structure file changed
         scrivx_changed = any(str(path).endswith(".scrivx") for path in changed_paths)
 
-        if scrivx_changed:
-            # Structure changed - run full sync to detect moves/deletions
-            logger.info("Scrivener structure file (.scrivx) changed, running full sync")
+        # Check if any files were deleted (they won't exist anymore)
+        has_deletions = any(not Path(path).exists() for path in changed_paths)
+
+        if scrivx_changed or has_deletions:
+            # Structure changed or files deleted - run full sync to detect moves/deletions
+            if scrivx_changed:
+                logger.info("Scrivener structure file (.scrivx) changed, running full sync")
+            if has_deletions:
+                logger.info(f"Detected {sum(1 for p in changed_paths if not Path(p).exists())} deleted files, running sync")
+
             try:
                 # Check if sync method exists (added in Phase 5)
                 if hasattr(self.scrivener_indexer, "sync"):
@@ -210,8 +247,16 @@ class FileWatcherDaemon:
             except Exception as e:
                 logger.error(f"Failed to sync Scrivener: {e}", exc_info=True)
         else:
-            # Only content files changed - do fast incremental re-indexing
+            # Only content files changed - reload structure and do fast incremental re-indexing
             logger.info(f"Re-indexing {len(changed_paths)} Scrivener content files")
+
+            # Reload structure to pick up any new documents
+            try:
+                self.scrivener_indexer.reload_structure()
+            except Exception as e:
+                logger.warning(f"Failed to reload structure: {e}")
+
+            # Re-index changed files
             for path in changed_paths:
                 try:
                     self.scrivener_indexer._index_document(Path(path))

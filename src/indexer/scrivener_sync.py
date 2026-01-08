@@ -347,6 +347,9 @@ class ScrivenerSyncDetector:
         """
         logger.info("Starting full Scrivener sync...")
 
+        # Reload structure to pick up any new/moved documents
+        self.indexer.reload_structure()
+
         changes = self.detect_changes()
         stats = self.apply_changes(changes)
 
