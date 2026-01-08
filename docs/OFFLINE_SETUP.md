@@ -1,10 +1,19 @@
-# Offline Operation Setup
+# Offline Operation Guide
 
-This document describes how to run the Book Research Buddy completely offline by caching the embedding model locally.
+This document explains the offline capabilities of Book Writing Buddy and how to achieve 100% offline operation.
 
-## Overview
+## Quick Summary
 
-The system uses the `all-MiniLM-L6-v2` sentence transformer model for generating embeddings. By default, this model downloads from HuggingFace on first use. For offline operation, we pre-download and cache the model locally.
+**Good News:** The app is ~90% offline-capable already!
+
+- ✅ **Embeddings**: Already offline via `sentence-transformers`
+- ✅ **Vector Database**: Qdrant runs locally in Docker
+- ✅ **Data Sources**: Zotero + Scrivener are local files
+- ⚠️ **LLM Agent**: Currently needs internet (LiteLLM/OpenAI API)
+
+**To go fully offline:** Add Ollama as LLM provider (see below)
+
+## What Works Offline (Already)
 
 ## Setup (Already Complete!)
 

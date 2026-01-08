@@ -8,13 +8,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import APIConnectionError
-from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.status import Status
 
 from .agent_v2 import create_research_agent
+from .theme import get_console
 from .tools import get_rag
 
 
@@ -25,7 +25,7 @@ class BookResearchChatCLI:
         """Initialize CLI."""
         load_dotenv()
 
-        self.console = Console()
+        self.console = get_console()  # Use themed console
         self.agent = create_research_agent()
         self.conversation_history = []  # Store conversation messages
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -41,7 +41,7 @@ class BookResearchChatCLI:
         """
         from langchain_openai import ChatOpenAI
 
-        self.console.print("\n[dim]Testing connection to LLM...[/dim]")
+        self.console.print("\n[muted]Testing connection to LLM...[/muted]")
 
         try:
             # Get configuration
@@ -65,20 +65,20 @@ class BookResearchChatCLI:
             llm.invoke([{"role": "user", "content": "Say 'OK' if you can read this."}])
 
             self.console.print(
-                f"[green]✓[/green] [dim]Connected to {model_name} at {api_base}[/dim]"
+                f"[checkmark]✓[/checkmark] [muted]Connected to {model_name} at {api_base}[/muted]"
             )
             return True
 
         except APIConnectionError as e:
-            self.console.print(f"\n[red]✗ Connection failed to {api_base}[/red]")
-            self.console.print(f"[yellow]Error: {str(e)}[/yellow]\n")
+            self.console.print(f"\n[cross]✗ Connection failed to {api_base}[/error]")
+            self.console.print(f"[warning]Error: {str(e)}[/warning]\n")
             self.console.print("Please check your .env configuration:")
             self.console.print("  - OPENAI_API_BASE or LITELLM_PROXY_URL")
             self.console.print("  - OPENAI_API_KEY or LITELLM_API_KEY\n")
             return False
 
         except Exception as e:
-            self.console.print(f"\n[red]✗ Unexpected error: {str(e)}[/red]\n")
+            self.console.print(f"\n[cross]✗ Unexpected error: {str(e)}[/error]\n")
             return False
 
     def check_qdrant(self):
@@ -87,7 +87,7 @@ class BookResearchChatCLI:
         Returns:
             True if successful, False otherwise
         """
-        self.console.print("[dim]Checking Qdrant vector database...[/dim]")
+        self.console.print("[muted]Checking Qdrant vector database...[/muted]")
 
         try:
             self.rag = get_rag()
@@ -99,36 +99,36 @@ class BookResearchChatCLI:
 
             if stats["points_count"] > 0:
                 self.console.print(
-                    f"[green]✓[/green] [dim]Index ready: {stats['points_count']:,} chunks[/dim]"
+                    f"[checkmark]✓[/checkmark] [muted]Index ready: {stats['points_count']:,} chunks[/muted]"
                 )
 
                 # Show last index times
                 last_indexed = stats["last_indexed"]
                 if last_indexed["zotero"] or last_indexed["scrivener"]:
                     self.console.print(
-                        f"[dim]  Last indexed: "
+                        f"[muted]  Last indexed: "
                         f"Zotero {last_indexed.get('zotero', 'never')}, "
-                        f"Scrivener {last_indexed.get('scrivener', 'never')}[/dim]"
+                        f"Scrivener {last_indexed.get('scrivener', 'never')}[/muted]"
                     )
 
                 return True
             else:
                 self.console.print(
-                    "[yellow]⚠ Index is empty - run indexer first[/yellow]"
+                    "[warning]⚠ Index is empty - run indexer first[/warning]"
                 )
                 return False
 
         except Exception as e:
-            self.console.print(f"[red]✗ Qdrant connection failed: {str(e)}[/red]")
+            self.console.print(f"[cross]✗ Qdrant connection failed: {str(e)}[/error]")
             self.console.print(
-                "[yellow]Make sure Qdrant is running: docker compose up -d qdrant[/yellow]\n"
+                "[warning]Make sure Qdrant is running: docker compose up -d qdrant[/warning]\n"
             )
             return False
 
     def print_welcome(self):
         """Print welcome message."""
         welcome = """
-# Book Research Buddy
+# Book Writing Buddy
 
 Welcome! I'm your AI research assistant for analyzing your Zotero research library and Scrivener manuscript.
 
@@ -171,7 +171,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 - "What are the key sources for chapter 3?"
 - "Get all my Zotero annotations for chapter 9"
         """
-        self.console.print(Panel(Markdown(welcome), border_style="blue"))
+        self.console.print(Panel(Markdown(welcome), border_style="info"))
 
     def print_message(self, role: str, content: str):
         """Print a formatted message.
@@ -181,12 +181,12 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             content: Message content
         """
         if role == "user":
-            self.console.print(f"\n[bold cyan]You:[/bold cyan] {content}")
+            self.console.print(f"\n[user]You:[/user] {content}")
         elif role == "assistant":
-            self.console.print("\n[bold green]Agent:[/bold green]")
+            self.console.print("\n[agent]Agent:[/agent]")
             self.console.print(Markdown(content))
         elif role == "system":
-            self.console.print(f"\n[dim]{content}[/dim]")
+            self.console.print(f"\n[muted]{content}[/muted]")
 
     def handle_command(self, command: str) -> bool:
         """Handle CLI commands.
@@ -202,7 +202,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         if command_lower == "/exit":
             self.save_conversation()
             self.console.print(
-                "\n[yellow]Goodbye! Your conversation has been saved.[/yellow]\n"
+                "\n[warning]Goodbye! Your conversation has been saved.[/warning]\n"
             )
             return True
 
@@ -213,7 +213,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             self.save_conversation()
             self.conversation_history = []
             self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.console.print("\n[green]Started new research session.[/green]\n")
+            self.console.print("\n[success]Started new research session.[/success]\n")
 
         elif command_lower == "/history":
             self.show_history()
@@ -233,9 +233,9 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                     if model == current:
                         current_tier = tier
                         break
-                self.console.print(f"\n[cyan]Current model: {current}[/cyan]")
+                self.console.print(f"\n[info]Current model: {current}[/info]")
                 if current_tier != "custom":
-                    self.console.print(f"[cyan]Tier: {current_tier}[/cyan]")
+                    self.console.print(f"[info]Tier: {current_tier}[/info]")
                 self.console.print("\nAvailable tiers:")
                 self.console.print(
                     f"  - good   ({model_map['good']}) - Fast & economical"
@@ -252,10 +252,10 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                     # Recreate agent with new model
                     self.agent = create_research_agent()
                     self.console.print(
-                        f"\n[green]✓ Switched to {tier} ({model_map[tier]})[/green]\n"
+                        f"\n[success]✓ Switched to {tier} ({model_map[tier]})[/success]\n"
                     )
                 else:
-                    self.console.print(f"\n[red]Unknown tier: {tier}[/red]")
+                    self.console.print(f"\n[error]Unknown tier: {tier}[/error]")
                     self.console.print("Available: good, better, best\n")
 
         elif command_lower == "/knowledge":
@@ -267,7 +267,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             source = parts[1] if len(parts) > 1 else "all"
             if source not in ["all", "zotero", "scrivener"]:
                 self.console.print(
-                    "\n[yellow]Usage: /reindex [all|zotero|scrivener][/yellow]\n"
+                    "\n[warning]Usage: /reindex [all|zotero|scrivener][/warning]\n"
                 )
             else:
                 self.trigger_reindex(source)
@@ -276,14 +276,14 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             self.show_diagnostics()
 
         else:
-            self.console.print(f"\n[red]Unknown command: {command}[/red]")
+            self.console.print(f"\n[error]Unknown command: {command}[/error]")
             self.console.print("Type /help for available commands.\n")
 
         return False
 
     def show_diagnostics(self):
         """Show diagnostic information about paths and configuration."""
-        self.console.print("\n[bold cyan]System Diagnostics[/bold cyan]\n")
+        self.console.print("\n[header]System Diagnostics[/header]\n")
 
         # Check environment variables
         self.console.print("[bold]Environment Variables:[/bold]")
@@ -292,44 +292,44 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         scrivener_path = os.getenv("SCRIVENER_PROJECT_PATH")
         qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
 
-        self.console.print(f"  ZOTERO_PATH: {zotero_path or '[red]NOT SET[/red]'}")
+        self.console.print(f"  ZOTERO_PATH: {zotero_path or '[error]NOT SET[/error]'}")
         if zotero_path:
             exists = Path(zotero_path).exists()
             self.console.print(
-                f"    Exists: {'[green]YES[/green]' if exists else '[red]NO[/red]'}"
+                f"    Exists: {'[success]YES[/success]' if exists else '[error]NO[/error]'}"
             )
             if exists:
                 db_path = Path(zotero_path) / "zotero.sqlite"
                 db_exists = db_path.exists()
                 self.console.print(
-                    f"    Database: {'[green]FOUND[/green]' if db_exists else '[red]NOT FOUND[/red]'}"
+                    f"    Database: {'[success]FOUND[/success]' if db_exists else '[error]NOT FOUND[/error]'}"
                 )
 
         self.console.print(
-            f"\n  ZOTERO_ROOT_COLLECTION: {zotero_root_collection or '[dim]NOT SET (indexes all collections)[/dim]'}"
+            f"\n  ZOTERO_ROOT_COLLECTION: {zotero_root_collection or '[muted]NOT SET (indexes all collections)[/muted]'}"
         )
         if zotero_root_collection:
             self.console.print(
-                f"    [dim]Only indexing collections under '{zotero_root_collection}'[/dim]"
+                f"    [muted]Only indexing collections under '{zotero_root_collection}'[/muted]"
             )
 
         self.console.print(
-            f"\n  SCRIVENER_PROJECT_PATH: {scrivener_path or '[red]NOT SET[/red]'}"
+            f"\n  SCRIVENER_PROJECT_PATH: {scrivener_path or '[error]NOT SET[/error]'}"
         )
         if scrivener_path:
             exists = Path(scrivener_path).exists()
             self.console.print(
-                f"    Exists: {'[green]YES[/green]' if exists else '[red]NO[/red]'}"
+                f"    Exists: {'[success]YES[/success]' if exists else '[error]NO[/error]'}"
             )
             if exists:
                 # Find .scrivx file dynamically (like ScrivenerParser does)
                 scrivx_files = list(Path(scrivener_path).glob("*.scrivx"))
                 if scrivx_files:
                     self.console.print(
-                        f"    .scrivx file: [green]FOUND ({scrivx_files[0].name})[/green]"
+                        f"    .scrivx file: [success]FOUND ({scrivx_files[0].name})[/success]"
                     )
                 else:
-                    self.console.print("    .scrivx file: [red]NOT FOUND[/red]")
+                    self.console.print("    .scrivx file: [error]NOT FOUND[/error]")
 
         self.console.print(f"\n  QDRANT_URL: {qdrant_url}")
 
@@ -338,12 +338,12 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         if self.rag:
             try:
                 info = self.rag.vectordb.get_collection_info()
-                self.console.print("  Status: [green]CONNECTED[/green]")
+                self.console.print("  Status: [success]CONNECTED[/success]")
                 self.console.print(f"  Points: {info['points_count']:,}")
             except Exception as e:
-                self.console.print(f"  Status: [red]FAILED[/red] - {e}")
+                self.console.print(f"  Status: [error]FAILED[/error] - {e}")
         else:
-            self.console.print("  [yellow]RAG not initialized[/yellow]")
+            self.console.print("  [warning]RAG not initialized[/warning]")
 
         # Check indexed data sample
         if self.rag:
@@ -374,17 +374,17 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                     )
                 else:
                     self.console.print(
-                        "  [yellow]No chapter numbers in sample[/yellow]"
+                        "  [warning]No chapter numbers in sample[/warning]"
                     )
 
             except Exception as e:
-                self.console.print(f"  [red]Error sampling data: {e}[/red]")
+                self.console.print(f"  [error]Error sampling data: {e}[/error]")
 
         self.console.print()
 
     def show_knowledge(self):
         """Show comprehensive knowledge base summary including Zotero and Scrivener details."""
-        self.console.print("\n[bold cyan]Knowledge Base Summary[/bold cyan]\n")
+        self.console.print("\n[header]Knowledge Base Summary[/header]\n")
 
         if self.rag:
             # Overall stats
@@ -402,14 +402,14 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             )
 
             # Zotero summary
-            self.console.print("\n[bold cyan]═══ Zotero Library ═══[/bold cyan]")
+            self.console.print("\n[header]═══ Zotero Library ═══[/header]")
             self.show_zotero_summary(header=False)
 
             # Scrivener summary
-            self.console.print("\n[bold cyan]═══ Scrivener Project ═══[/bold cyan]")
+            self.console.print("\n[header]═══ Scrivener Project ═══[/header]")
             self.show_scrivener_summary(header=False)
         else:
-            self.console.print("[yellow]RAG system not initialized[/yellow]")
+            self.console.print("[warning]RAG system not initialized[/warning]")
 
         self.console.print()
 
@@ -428,10 +428,10 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         from rich.table import Table
 
         if header:
-            self.console.print("\n[bold cyan]Zotero Library Summary[/bold cyan]\n")
+            self.console.print("\n[header]Zotero Library Summary[/header]\n")
 
         if not self.rag:
-            self.console.print("[yellow]RAG system not initialized[/yellow]\n")
+            self.console.print("[warning]RAG system not initialized[/warning]\n")
             return
 
         try:
@@ -471,9 +471,11 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                     break
 
             if not all_points:
-                self.console.print("[yellow]No Zotero documents indexed yet.[/yellow]")
                 self.console.print(
-                    "[dim]Run /reindex zotero to index your Zotero library.[/dim]\n"
+                    "[warning]No Zotero documents indexed yet.[/warning]"
+                )
+                self.console.print(
+                    "[muted]Run /reindex zotero to index your Zotero library.[/muted]\n"
                 )
                 return
 
@@ -511,14 +513,14 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                     stats["other"] += 1
 
             # Create table
-            table = Table(show_header=True, header_style="bold cyan")
+            table = Table(show_header=True, header_style="table.header")
             table.add_column("Chapter", style="bold", width=7)
-            table.add_column("Collection", style="dim")
+            table.add_column("Collection", style="muted")
             table.add_column("Items", justify="right")
-            table.add_column("Chunks", justify="right", style="cyan")
-            table.add_column("PDFs", justify="right", style="green")
-            table.add_column("HTML", justify="right", style="blue")
-            table.add_column("TXT", justify="right", style="yellow")
+            table.add_column("Chunks", justify="right", style="number")
+            table.add_column("PDFs", justify="right", style="success")
+            table.add_column("HTML", justify="right", style="info")
+            table.add_column("TXT", justify="right", style="highlight")
 
             total_items = 0
             total_chunks = 0
@@ -570,20 +572,20 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                 "[bold]TOTAL",
                 f"[bold]{chapter_count} chapters",
                 f"[bold]{total_items}",
-                f"[bold cyan]{total_chunks}",
-                f"[bold green]{total_pdf}",
-                f"[bold blue]{total_html}",
-                f"[bold yellow]{total_txt}",
+                f"[number]{total_chunks}",
+                f"[success]{total_pdf}",
+                f"[info]{total_html}",
+                f"[highlight]{total_txt}",
             )
 
             self.console.print(
-                f"[dim]Showing indexed Zotero data ({len(all_points):,} chunks)[/dim]\n"
+                f"[muted]Showing indexed Zotero data ({len(all_points):,} chunks)[/muted]\n"
             )
             self.console.print(table)
             self.console.print()
 
         except Exception as e:
-            self.console.print(f"[red]✗ Error: {e}[/red]\n")
+            self.console.print(f"[cross]✗ Error: {e}[/error]\n")
             import traceback
 
             traceback.print_exc()
@@ -597,14 +599,14 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         from rich.table import Table
 
         if header:
-            self.console.print("\n[bold cyan]Scrivener Indexing Summary[/bold cyan]\n")
+            self.console.print("\n[header]Scrivener Indexing Summary[/header]\n")
 
         try:
             # Get summary from RAG
             summary = self.rag.get_scrivener_summary()
 
             if summary.get("message"):
-                self.console.print(f"[yellow]{summary['message']}[/yellow]\n")
+                self.console.print(f"[warning]{summary['message']}[/warning]\n")
                 return
 
             # Display overall statistics
@@ -627,13 +629,13 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             # Create per-chapter table
             chapters = summary.get("chapters", [])
             if chapters:
-                table = Table(show_header=True, header_style="bold cyan")
+                table = Table(show_header=True, header_style="table.header")
                 table.add_column("Ch", style="bold", width=4)
-                table.add_column("Title", style="dim")
+                table.add_column("Title", style="muted")
                 table.add_column("Docs", justify="right")
                 table.add_column("Chunks", justify="right")
-                table.add_column("Words", justify="right", style="green")
-                table.add_column("Types", style="dim")
+                table.add_column("Words", justify="right", style="success")
+                table.add_column("Types", style="muted")
 
                 for ch in chapters:
                     # Format document types
@@ -660,19 +662,19 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             unassigned_count = summary.get("unassigned_count", 0)
             if unassigned_count > 0:
                 self.console.print(
-                    f"[yellow]⚠ {unassigned_count} unassigned documents[/yellow]"
+                    f"[warning]⚠ {unassigned_count} unassigned documents[/warning]"
                 )
                 unassigned_docs = summary.get("unassigned_docs", [])
                 if unassigned_docs:
-                    self.console.print("[dim]Sample unassigned documents:[/dim]")
+                    self.console.print("[muted]Sample unassigned documents:[/muted]")
                     for doc in unassigned_docs[:5]:
                         self.console.print(
-                            f"  [dim]• {doc['doc_type']}: {doc['words']} words[/dim]"
+                            f"  [muted]• {doc['doc_type']}: {doc['words']} words[/muted]"
                         )
                 self.console.print()
 
         except Exception as e:
-            self.console.print(f"[red]✗ Error: {e}[/red]\n")
+            self.console.print(f"[cross]✗ Error: {e}[/error]\n")
             import traceback
 
             traceback.print_exc()
@@ -691,11 +693,11 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 
         if source == "all":
             self.console.print(
-                "\n[bold cyan]Starting re-indexing (all sources)...[/bold cyan]\n"
+                "\n[header]Starting re-indexing (all sources)...[/header]\n"
             )
         else:
             self.console.print(
-                f"\n[bold cyan]Starting re-indexing ({source} only)...[/bold cyan]\n"
+                f"\n[header]Starting re-indexing ({source} only)...[/header]\n"
             )
 
         try:
@@ -721,20 +723,20 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             if source in ["all", "zotero"]:
                 if not zotero_path or not Path(zotero_path).exists():
                     self.console.print(
-                        "[red]✗ Zotero path not configured or doesn't exist[/red]"
+                        "[cross]✗ Zotero path not configured or doesn't exist[/error]"
                     )
                     self.console.print(
-                        "[yellow]Set ZOTERO_PATH in your .env file[/yellow]\n"
+                        "[warning]Set ZOTERO_PATH in your .env file[/warning]\n"
                     )
                     return
 
             if source in ["all", "scrivener"]:
                 if not scrivener_path or not Path(scrivener_path).exists():
                     self.console.print(
-                        "[red]✗ Scrivener path not configured or doesn't exist[/red]"
+                        "[cross]✗ Scrivener path not configured or doesn't exist[/error]"
                     )
                     self.console.print(
-                        "[yellow]Set SCRIVENER_PROJECT_PATH in your .env file[/yellow]\n"
+                        "[warning]Set SCRIVENER_PROJECT_PATH in your .env file[/warning]\n"
                     )
                     return
 
@@ -749,12 +751,12 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             # Index Zotero (if requested)
             if source in ["all", "zotero"]:
                 # Delete old Zotero data first
-                self.console.print("[dim]Removing old Zotero data...[/dim]")
+                self.console.print("[muted]Removing old Zotero data...[/muted]")
                 vectordb.delete_by_source("zotero")
 
-                self.console.print("[dim]Indexing Zotero library...[/dim]")
+                self.console.print("[muted]Indexing Zotero library...[/muted]")
                 with Status(
-                    "[bold cyan]Indexing Zotero...[/bold cyan]",
+                    "[header]Indexing Zotero...[/header]",
                     spinner="dots",
                     console=self.console,
                 ):
@@ -764,19 +766,19 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                     zotero_stats = zotero_indexer.index_all()
 
                 self.console.print(
-                    f"[green]✓[/green] Indexed {zotero_stats.get('documents_indexed', 0)} Zotero documents "
+                    f"[checkmark]✓[/checkmark] Indexed {zotero_stats.get('documents_indexed', 0)} Zotero documents "
                     f"({zotero_stats.get('chunks_indexed', 0)} chunks)"
                 )
 
             # Index Scrivener (if requested)
             if source in ["all", "scrivener"]:
                 # Delete old Scrivener data first
-                self.console.print("[dim]Removing old Scrivener data...[/dim]")
+                self.console.print("[muted]Removing old Scrivener data...[/muted]")
                 vectordb.delete_by_source("scrivener")
 
-                self.console.print("[dim]Indexing Scrivener project...[/dim]")
+                self.console.print("[muted]Indexing Scrivener project...[/muted]")
                 with Status(
-                    "[bold cyan]Indexing Scrivener...[/bold cyan]",
+                    "[header]Indexing Scrivener...[/header]",
                     spinner="dots",
                     console=self.console,
                 ):
@@ -789,27 +791,29 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                     scrivener_stats = scrivener_indexer.index_all()
 
                 self.console.print(
-                    f"[green]✓[/green] Indexed {scrivener_stats.get('documents_indexed', 0)} Scrivener documents "
+                    f"[checkmark]✓[/checkmark] Indexed {scrivener_stats.get('documents_indexed', 0)} Scrivener documents "
                     f"({scrivener_stats.get('chunks_indexed', 0)} chunks)"
                 )
 
-            self.console.print("\n[bold green]✓ Re-indexing complete![/bold green]\n")
+            self.console.print("\n[success]✓ Re-indexing complete![/bold green]\n")
 
             # Refresh RAG instance (uses singleton)
             self.rag = get_rag()
 
         except FileNotFoundError as e:
-            self.console.print(f"\n[red]✗ Configuration file not found: {e}[/red]\n")
+            self.console.print(
+                f"\n[cross]✗ Configuration file not found: {e}[/error]\n"
+            )
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e).lower():
-                self.console.print("\n[red]✗ Zotero database is locked[/red]")
+                self.console.print("\n[cross]✗ Zotero database is locked[/error]")
                 self.console.print(
-                    "[yellow]Please close Zotero and try again[/yellow]\n"
+                    "[warning]Please close Zotero and try again[/warning]\n"
                 )
             else:
-                self.console.print(f"\n[red]✗ Database error: {e}[/red]\n")
+                self.console.print(f"\n[cross]✗ Database error: {e}[/error]\n")
         except Exception as e:
-            self.console.print(f"\n[red]✗ Re-indexing failed: {e}[/red]\n")
+            self.console.print(f"\n[cross]✗ Re-indexing failed: {e}[/error]\n")
             import traceback
 
             traceback.print_exc()
@@ -817,12 +821,12 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
     def show_history(self):
         """Show past conversations."""
         if not self.conversation_dir.exists():
-            self.console.print("\n[yellow]No conversations found yet.[/yellow]\n")
+            self.console.print("\n[warning]No conversations found yet.[/warning]\n")
             return
 
         conversations = sorted(self.conversation_dir.glob("*.json"), reverse=True)
         if not conversations:
-            self.console.print("\n[yellow]No conversations found yet.[/yellow]\n")
+            self.console.print("\n[warning]No conversations found yet.[/warning]\n")
             return
 
         self.console.print("\n[bold]Past Conversations:[/bold]")
@@ -859,7 +863,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         try:
             # Run agent with thinking spinner
             with Status(
-                "[bold cyan]Researching...[/bold cyan]",
+                "[header]Researching...[/header]",
                 spinner="dots",
                 console=self.console,
             ):
@@ -871,7 +875,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             messages = result.get("messages", [])
             if not messages:
                 self.console.print(
-                    "\n[yellow]No response generated. Try rephrasing your question.[/yellow]"
+                    "\n[warning]No response generated. Try rephrasing your question.[/warning]"
                 )
                 return
 
@@ -885,7 +889,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 
             if not response:
                 self.console.print(
-                    "\n[yellow]No response generated. Try rephrasing your question.[/yellow]"
+                    "\n[warning]No response generated. Try rephrasing your question.[/warning]"
                 )
                 return
 
@@ -896,7 +900,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
             self.print_message("assistant", response)
 
         except Exception as e:
-            self.console.print(f"\n[red]Error: {e}[/red]\n")
+            self.console.print(f"\n[error]Error: {e}[/error]\n")
             import traceback
 
             traceback.print_exc()
@@ -906,13 +910,13 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         # Test connection first
         if not self.test_connection():
             self.console.print(
-                "\n[yellow]Starting anyway - you can fix configuration later[/yellow]\n"
+                "\n[warning]Starting anyway - you can fix configuration later[/warning]\n"
             )
 
         # Check Qdrant
         if not self.check_qdrant():
             self.console.print(
-                "\n[yellow]Continuing without index - some features won't work[/yellow]\n"
+                "\n[warning]Continuing without index - some features won't work[/warning]\n"
             )
 
         self.print_welcome()
@@ -920,7 +924,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
         while True:
             try:
                 # Get user input
-                user_input = Prompt.ask("\n[bold cyan]You[/bold cyan]")
+                user_input = Prompt.ask("\n[user]You[/user]")
 
                 if not user_input.strip():
                     continue
@@ -935,7 +939,9 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
                 self.run_agent(user_input)
 
             except KeyboardInterrupt:
-                self.console.print("\n\n[yellow]Use /exit to quit properly.[/yellow]\n")
+                self.console.print(
+                    "\n\n[warning]Use /exit to quit properly.[/warning]\n"
+                )
             except EOFError:
                 break
 
