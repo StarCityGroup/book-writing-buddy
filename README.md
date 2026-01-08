@@ -319,6 +319,220 @@ Generate formatted summaries and bibliographies:
 
 Perfect for preparing reference materials before writing sessions.
 
+## Offline Operation
+
+The app supports **~90% offline operation** out of the box, with automatic fallback to fully offline mode.
+
+### What's Already Offline
+
+- ✅ **Embeddings**: Uses local `sentence-transformers` model (`all-MiniLM-L6-v2`)
+- ✅ **Vector Database**: Qdrant runs locally in Docker
+- ✅ **Data Sources**: Zotero + Scrivener are local files
+- ✅ **Indexing**: All text extraction and chunking happens locally
+- ⚠️ **LLM Agent**: By default uses online API, but **automatically falls back to Ollama** if unavailable
+
+### Fully Offline Setup with Ollama
+
+To run 100% offline, install Ollama for the conversational agent:
+
+#### 1. Install Ollama
+
+```bash
+# macOS/Linux
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Or download from https://ollama.com
+```
+
+#### 2. Pull a Model
+
+```bash
+# Recommended: Fast 3B model (good for most tasks)
+ollama pull llama3.2:3b
+
+# Alternative: Better quality 8B model (slower but higher quality)
+ollama pull llama3.1:8b
+```
+
+#### 3. Configure `.env`
+
+```bash
+# Set your offline model preference
+OFFLINE_AGENT_MODEL=llama3.2:3b
+
+# Ollama URL (default works for most setups)
+OLLAMA_BASE_URL=http://localhost:11434/v1
+```
+
+#### 4. Start Ollama
+
+```bash
+# Ollama runs as a service (usually auto-starts)
+# If not running, start it:
+ollama serve
+```
+
+### How Automatic Fallback Works
+
+The agent intelligently handles connection failures:
+
+1. **Startup**: Tries to connect to your configured online LLM (e.g., Claude, GPT)
+2. **Fallback**: If connection fails, automatically switches to local Ollama
+3. **Notification**: CLI shows which mode is active (online or offline)
+4. **Streaming**: In offline mode, responses stream token-by-token so you can see progress
+
+**No configuration needed** - it just works! If online LLM is unavailable (no internet, API down, etc.), the app seamlessly switches to offline mode.
+
+### Model Cache
+
+Embedding models are cached locally for faster loading:
+
+- **Location**: `./data/models/`
+- **Model**: `all-MiniLM-L6-v2` (~90 MB)
+- **Docker Mount**: Mounted read-only into containers
+- **Environment**: `MODEL_CACHE_DIR=./data/models`
+
+To re-download the model:
+
+```bash
+uv run python scripts/download_model.py
+docker compose up --build -d
+```
+
+### Model Recommendations
+
+Choose a model based on your hardware and quality needs:
+
+**Small/Fast (3B-7B)** - Good for basic queries, fast responses:
+- `llama3.2:3b` - Very fast, good for most tasks
+- `phi3:mini` - Fast with good reasoning
+- `mistral:7b` - Balanced speed/quality
+
+**Medium/Better (8B-14B)** - Better quality, moderate speed:
+- `llama3.1:8b` - Good quality, reasonable speed
+- `qwen2.5:14b-instruct` - Excellent quality, slower
+- `mistral:8x7b` - High quality, needs more RAM
+
+**Large/Best (70B+)** - Highest quality, slowest:
+- `llama3.1:70b` - Excellent quality
+- Requires powerful hardware (GPU recommended)
+
+### Performance Comparison
+
+| Aspect | Online Mode | Offline Mode |
+|--------|-------------|--------------|
+| **Speed** | Very fast (milliseconds) | Slower (seconds) |
+| **Quality** | Highest (Claude, GPT) | Good (depends on model) |
+| **Privacy** | Data sent to API | 100% local |
+| **Network** | Required | Not required |
+| **Cost** | API costs | Free (electricity) |
+| **RAM** | Minimal | 4-16GB depending on model |
+
+### Testing Offline Mode
+
+Verify your offline setup works:
+
+```bash
+# Run automated tests
+uv run python scripts/test_offline_fallback.py
+
+# Test forced offline (simulates network failure)
+uv run python scripts/test_forced_offline.py
+
+# Test manually
+# Disconnect from internet, then:
+uv run main.py
+```
+
+### Troubleshooting Offline Mode
+
+**Ollama not connecting:**
+```bash
+# Check if Ollama is running
+ollama list
+
+# Check Ollama service
+ps aux | grep ollama
+curl http://localhost:11434/api/tags
+
+# Restart Ollama
+# macOS: brew services restart ollama
+# Linux: sudo systemctl restart ollama
+# Manual: ollama serve
+```
+
+**Model not found:**
+```bash
+# Pull the model
+ollama pull llama3.2:3b
+
+# List installed models
+ollama list
+
+# Check .env matches installed model
+grep OFFLINE_AGENT_MODEL .env
+```
+
+**Slow responses:**
+- Use smaller model: `ollama pull llama3.2:3b`
+- Ollama automatically uses GPU if available
+- Check GPU usage: `nvidia-smi` (NVIDIA) or Activity Monitor (macOS)
+- Close other resource-intensive applications
+
+**Connection timeout:**
+If your system is slow, increase timeout in `src/agent_v2.py` line ~133:
+```python
+if test_llm_connection(offline_llm, timeout=30):  # Increase from 10
+```
+
+### Advanced Usage
+
+**Force offline mode** (always use Ollama):
+```bash
+# In .env
+OPENAI_API_KEY="offline"
+OPENAI_API_BASE="http://invalid:9999"
+```
+
+**Multiple Ollama instances** (different models on different ports):
+```bash
+# Terminal 1
+OLLAMA_HOST=127.0.0.1:11434 ollama serve
+
+# Terminal 2
+OLLAMA_HOST=127.0.0.1:11435 ollama serve
+
+# In .env
+OLLAMA_BASE_URL=http://localhost:11435/v1
+```
+
+**Check mode programmatically:**
+```python
+from src.agent_v2 import is_using_offline_mode
+
+if is_using_offline_mode():
+    print("Running in offline mode")
+```
+
+### Privacy & Security
+
+**Online Mode:**
+- Queries sent to API provider (Cornell LiteLLM, OpenAI, etc.)
+- Subject to provider's privacy policy
+- May be logged/stored by provider
+
+**Offline Mode:**
+- Everything runs locally on your machine
+- No data sent to external services
+- 100% private operation
+
+**Best Practices:**
+1. Keep both modes ready - install Ollama even if using online primarily
+2. Test offline regularly to verify fallback works
+3. Right-size your model for your hardware
+4. Monitor performance and adjust model size accordingly
+5. Update models regularly: `ollama pull <model>`
+
 ## Indexing
 
 ### Automatic Indexing
@@ -502,22 +716,45 @@ book-writing-buddy/
 Create a `.env` file (see `.env.example`):
 
 ```bash
-# Zotero data directory (contains zotero.sqlite and storage/)
-ZOTERO_DATA_PATH=/Users/yourusername/Zotero
+# ============================================================
+# LLM Configuration (Online)
+# ============================================================
+OPENAI_API_KEY="your-api-key-here"
+OPENAI_API_BASE="https://api.openai.com/v1"
+DEFAULT_MODEL=gpt-5  # Primary online model for the agent
 
-# Scrivener project file (.scriv)
+# Model tiers for /model command
+MODEL_GOOD=gpt-5-mini
+MODEL_BETTER=gpt-5
+MODEL_BEST=gpt-5-pro
+
+# ============================================================
+# Offline Operation (Ollama Fallback)
+# ============================================================
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OFFLINE_AGENT_MODEL=llama3.2:3b  # Automatic fallback model
+
+# ============================================================
+# Data Sources
+# ============================================================
+ZOTERO_PATH=/Users/yourusername/Zotero
 SCRIVENER_PROJECT_PATH=/Users/yourusername/Dropbox/Apps/Scrivener/Project.scriv
 
-# Debug mode (optional)
-DEBUG=false
+# ============================================================
+# Vector Database
+# ============================================================
+QDRANT_URL=http://localhost:6333
 ```
 
-These are used by the Docker container for mounting directories.
+These variables control LLM selection, offline fallback, and data source paths.
 
 ## FAQ
 
 **Q: Does this draft content for me?**
 A: No. It organizes and searches your research. You write the book.
+
+**Q: Can this work completely offline?**
+A: Yes! Embeddings and indexing are already offline. For the agent, install Ollama and it automatically falls back to local LLM when online API is unavailable. See "Offline Operation" section above.
 
 **Q: Do I need to keep Zotero running?**
 A: Close Zotero when indexing (database lock). Otherwise it can run.
@@ -529,7 +766,7 @@ A: The file watcher automatically re-indexes when files change. No manual action
 A: Currently Zotero and Scrivener only, but the architecture is extensible.
 
 **Q: Is my research sent to the cloud?**
-A: Indexing is 100% local. Only TUI agent queries use the Claude API (via LiteLLM proxy).
+A: Only if using online LLM for the agent. All indexing/embeddings are local. With Ollama, everything runs 100% offline on your machine.
 
 **Q: What if I don't have chapter numbers?**
 A: The system will still work, you just can't filter by chapter.
@@ -542,6 +779,7 @@ A: The system will still work, you just can't filter by chapter.
 - **Use natural language** queries - the agent understands conversational questions
 - **Agent is autonomous** - it decides which tools to use and can combine them
 - **Chapter-organized collections** work best - use `{number}. {title}` pattern in Zotero
+- **Offline mode** - Install Ollama for automatic fallback when online LLM unavailable
 - **Monitor performance** with `docker stats` if needed
 
 ## License
@@ -554,6 +792,7 @@ MIT License
 - [sentence-transformers](https://www.sbert.net/) - Embeddings
 - [LangGraph](https://langchain-ai.github.io/langgraph/) - Agent framework
 - [Anthropic Claude](https://www.anthropic.com/claude) - LLM via LiteLLM
+- [Ollama](https://ollama.com/) - Local LLM runtime for offline operation
 - [uv](https://github.com/astral-sh/uv) - Python package manager
 
 ---

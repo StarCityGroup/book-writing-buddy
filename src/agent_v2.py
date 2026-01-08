@@ -2,6 +2,8 @@
 
 This agent uses a plan-research-analyze-respond loop with direct tool access.
 Much simpler than the complex multi-node architecture.
+
+Supports offline operation via Ollama fallback when online LLM is unavailable.
 """
 
 import os
@@ -9,10 +11,14 @@ import os
 import structlog
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
+from openai import APIConnectionError
 
 from .tools import ALL_TOOLS, initialize_rag
 
 logger = structlog.get_logger()
+
+# Global flag to track if we're using offline mode
+_using_offline_mode = False
 
 
 def load_book_context() -> str:
@@ -52,6 +58,89 @@ def load_book_context() -> str:
 
 
 BOOK_CONTEXT = load_book_context()
+
+
+def test_llm_connection(llm: ChatOpenAI, timeout: int = 5) -> bool:
+    """Test if an LLM is reachable.
+
+    Args:
+        llm: LLM instance to test
+        timeout: Connection timeout in seconds
+
+    Returns:
+        True if connection successful, False otherwise
+    """
+    try:
+        # Simple test prompt
+        llm.invoke(
+            [{"role": "user", "content": "Say 'OK' if you can read this."}],
+            config={"timeout": timeout},
+        )
+        return True
+    except (APIConnectionError, Exception) as e:
+        logger.debug("LLM connection test failed", error=str(e))
+        return False
+
+
+def create_llm_with_fallback() -> tuple[ChatOpenAI, bool]:
+    """Create LLM instance with automatic Ollama fallback.
+
+    Tries to connect to online LLM first. If that fails, falls back to
+    local Ollama instance for offline operation.
+
+    Returns:
+        Tuple of (llm_instance, is_offline_mode)
+    """
+    # Try online LLM first
+    litellm_url = os.getenv("OPENAI_API_BASE") or os.getenv(
+        "LITELLM_PROXY_URL", "http://localhost:4000"
+    )
+    litellm_key = os.getenv("OPENAI_API_KEY") or os.getenv("LITELLM_API_KEY", "sk-1234")
+    online_model = os.getenv("DEFAULT_MODEL", "anthropic.claude-4.5-haiku")
+
+    logger.info(
+        "Attempting to connect to online LLM", model=online_model, url=litellm_url
+    )
+
+    online_llm = ChatOpenAI(
+        model=online_model, base_url=litellm_url, api_key=litellm_key, temperature=0.7
+    )
+
+    if test_llm_connection(online_llm):
+        logger.info("✓ Connected to online LLM", model=online_model)
+        return online_llm, False
+
+    # Fallback to Ollama
+    logger.warning("⚠ Online LLM unavailable, falling back to Ollama")
+
+    ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    offline_model = os.getenv("OFFLINE_AGENT_MODEL", "llama3.2:3b")
+
+    logger.info("Attempting to connect to Ollama", model=offline_model, url=ollama_url)
+
+    offline_llm = ChatOpenAI(
+        model=offline_model,
+        base_url=ollama_url,
+        api_key="ollama",  # Ollama doesn't need a real key
+        temperature=0.7,
+    )
+
+    if test_llm_connection(offline_llm, timeout=10):
+        logger.info("✓ Connected to Ollama (offline mode)", model=offline_model)
+        return offline_llm, True
+
+    # If both fail, return online LLM anyway and let it fail with a proper error
+    logger.error("⨯ Both online LLM and Ollama are unavailable")
+    return online_llm, False
+
+
+def is_using_offline_mode() -> bool:
+    """Check if agent is running in offline mode.
+
+    Returns:
+        True if using Ollama, False if using online LLM
+    """
+    return _using_offline_mode
 
 
 SYSTEM_PROMPT = f"""You are an AI research assistant helping an author analyze their book research materials.
@@ -160,21 +249,19 @@ Use markdown formatting for clarity.
 
 
 def create_research_agent():
-    """Create the book research ReAct agent.
+    """Create the book research ReAct agent with automatic offline fallback.
+
+    Attempts to connect to online LLM first. If unavailable, falls back to
+    local Ollama for offline operation.
 
     Returns:
         LangGraph compiled agent that can be invoked with user queries
     """
-    # LiteLLM proxy configuration
-    litellm_url = os.getenv("OPENAI_API_BASE") or os.getenv(
-        "LITELLM_PROXY_URL", "http://localhost:4000"
-    )
-    litellm_key = os.getenv("OPENAI_API_KEY") or os.getenv("LITELLM_API_KEY", "sk-1234")
-    model_name = os.getenv("DEFAULT_MODEL", "anthropic.claude-4.5-haiku")
+    global _using_offline_mode
 
-    llm = ChatOpenAI(
-        model=model_name, base_url=litellm_url, api_key=litellm_key, temperature=0.7
-    )
+    # Create LLM with automatic fallback
+    llm, is_offline = create_llm_with_fallback()
+    _using_offline_mode = is_offline
 
     # Pre-initialize RAG to avoid parallel initialization race conditions
     # This loads the embedding model once before any tools are called

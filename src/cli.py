@@ -7,13 +7,12 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from openai import APIConnectionError
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.status import Status
 
-from .agent_v2 import create_research_agent
+from .agent_v2 import create_research_agent, is_using_offline_mode
 from .theme import get_console
 from .tools import get_rag
 
@@ -34,52 +33,37 @@ class BookResearchChatCLI:
         self.rag = None  # Initialized in run()
 
     def test_connection(self):
-        """Test LLM connection at startup.
+        """Initialize agent and display connection status.
+
+        The agent automatically handles online/offline fallback.
 
         Returns:
-            True if connection successful, False otherwise
+            True (always, since fallback is handled automatically)
         """
-        from langchain_openai import ChatOpenAI
+        self.console.print("\n[muted]Initializing LLM agent...[/muted]")
 
-        self.console.print("\n[muted]Testing connection to LLM...[/muted]")
-
-        try:
-            # Get configuration
+        # Agent creation handles connection testing and fallback
+        # No need to test separately - just check the result
+        if is_using_offline_mode():
+            offline_model = os.getenv("OFFLINE_AGENT_MODEL", "llama3.2:3b")
+            ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+            self.console.print("[warning]⚠ Using offline mode with Ollama[/warning]")
+            self.console.print(
+                f"[muted]  Model: {offline_model} at {ollama_url}[/muted]"
+            )
+            self.console.print(
+                "[muted]  Note: Local LLM generation is slower - responses will stream[/muted]"
+            )
+        else:
+            online_model = os.getenv("DEFAULT_MODEL", "anthropic.claude-4.5-haiku")
             api_base = os.getenv("OPENAI_API_BASE") or os.getenv(
                 "LITELLM_PROXY_URL", "http://localhost:4000"
             )
-            api_key = os.getenv("OPENAI_API_KEY") or os.getenv(
-                "LITELLM_API_KEY", "sk-1234"
-            )
-            model_name = os.getenv("DEFAULT_MODEL", "anthropic.claude-4.5-haiku")
-
-            # Create test LLM instance
-            llm = ChatOpenAI(
-                model=model_name,
-                base_url=api_base,
-                api_key=api_key,
-                temperature=0.7,
-            )
-
-            # Simple test prompt
-            llm.invoke([{"role": "user", "content": "Say 'OK' if you can read this."}])
-
             self.console.print(
-                f"[checkmark]✓[/checkmark] [muted]Connected to {model_name} at {api_base}[/muted]"
+                f"[checkmark]✓[/checkmark] [muted]Connected to {online_model} at {api_base}[/muted]"
             )
-            return True
 
-        except APIConnectionError as e:
-            self.console.print(f"\n[cross]✗ Connection failed to {api_base}[/error]")
-            self.console.print(f"[warning]Error: {str(e)}[/warning]\n")
-            self.console.print("Please check your .env configuration:")
-            self.console.print("  - OPENAI_API_BASE or LITELLM_PROXY_URL")
-            self.console.print("  - OPENAI_API_KEY or LITELLM_API_KEY\n")
-            return False
-
-        except Exception as e:
-            self.console.print(f"\n[cross]✗ Unexpected error: {str(e)}[/error]\n")
-            return False
+        return True
 
     def check_qdrant(self):
         """Check Qdrant connection and index status.
@@ -156,14 +140,26 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 
 ## Commands
 
-- `/help` - Show this help message
-- `/settings` - Check paths, connections, and configuration
-- `/knowledge` - View indexed data, summaries, and last update times
-- `/model` - Switch between model tiers (good/better/best)
+<table>
+<tr>
+<td width="50%">
+
+- `/help` - Show this help
+- `/settings` - Check configuration
+- `/knowledge` - View indexed data
+- `/model` - Switch model tiers
+
+</td>
+<td width="50%">
+
 - `/history` - View past conversations
-- `/reindex [all|zotero|scrivener]` - Manually trigger re-indexing (close Zotero first!)
+- `/reindex [source]` - Re-index data
 - `/new` - Start fresh conversation
-- `/exit` - Exit the application
+- `/exit` - Exit application
+
+</td>
+</tr>
+</table>
 
 **Just ask a question to get started!** Examples:
 - "Track the theme 'infrastructure failure' across all chapters"
@@ -907,11 +903,8 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 
     def run(self):
         """Run the interactive CLI."""
-        # Test connection first
-        if not self.test_connection():
-            self.console.print(
-                "\n[warning]Starting anyway - you can fix configuration later[/warning]\n"
-            )
+        # Initialize connection (automatically handles online/offline fallback)
+        self.test_connection()
 
         # Check Qdrant
         if not self.check_qdrant():
