@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point for Book Writing Buddy."""
+"""Entry point for Book Research Buddy CLI."""
 
 from src.cli import main
 

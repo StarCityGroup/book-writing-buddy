@@ -1,24 +1,21 @@
-"""Simplified ReAct agent for book research.
+"""Book research agent using Claude Agent SDK.
 
-This agent uses a plan-research-analyze-respond loop with direct tool access.
-Much simpler than the complex multi-node architecture.
+This agent uses the Claude Agent SDK with custom MCP tools for research operations.
 """
 
 import os
+from pathlib import Path
 
 import structlog
-from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
+from claude_agent_sdk import ClaudeAgentOptions
 
-from .tools import ALL_TOOLS, initialize_rag
+from .tools import initialize_rag, research_server
 
 logger = structlog.get_logger()
 
 
 def load_book_context() -> str:
     """Load book context from Scrivener structure and outline.txt."""
-    from pathlib import Path
-
     parts = []
 
     # 1. Get Scrivener chapter structure (definitive)
@@ -159,33 +156,52 @@ Use markdown formatting for clarity.
 """
 
 
-def create_research_agent():
-    """Create the book research ReAct agent.
+def create_agent_options() -> ClaudeAgentOptions:
+    """Create Claude Agent SDK options.
 
     Returns:
-        LangGraph compiled agent that can be invoked with user queries
+        ClaudeAgentOptions configured with research tools and system prompt
     """
-    # LiteLLM proxy configuration
-    litellm_url = os.getenv("OPENAI_API_BASE") or os.getenv(
-        "LITELLM_PROXY_URL", "http://localhost:4000"
-    )
-    litellm_key = os.getenv("OPENAI_API_KEY") or os.getenv("LITELLM_API_KEY", "sk-1234")
-    model_name = os.getenv("DEFAULT_MODEL", "anthropic.claude-4.5-haiku")
+    # Get model from environment (handle LiteLLM format)
+    model_env = os.getenv("DEFAULT_MODEL", "claude-sonnet-4-5-20250514")
 
-    llm = ChatOpenAI(
-        model=model_name, base_url=litellm_url, api_key=litellm_key, temperature=0.7
-    )
+    # Convert LiteLLM format (anthropic.claude-4.5-sonnet) to SDK format
+    if model_env.startswith("anthropic."):
+        model_env = model_env.replace("anthropic.", "")
+
+    # Map common names to SDK format
+    model_mapping = {
+        "claude-4.5-haiku": "claude-haiku-4-5-20250514",
+        "claude-4.5-sonnet": "claude-sonnet-4-5-20250514",
+        "claude-4.5-opus": "claude-opus-4-5-20251001",
+    }
+
+    model_name = model_mapping.get(model_env, model_env)
 
     # Pre-initialize RAG to avoid parallel initialization race conditions
-    # This loads the embedding model once before any tools are called
     initialize_rag()
 
-    # Create ReAct agent using LangGraph prebuilt
-    # This automatically handles the ReAct loop with tool calling
-    agent = create_react_agent(
-        model=llm,
-        tools=ALL_TOOLS,
-        prompt=SYSTEM_PROMPT,  # System prompt for the agent
+    # Create options with research MCP server
+    options = ClaudeAgentOptions(
+        system_prompt=SYSTEM_PROMPT,
+        mcp_servers={"research": research_server},
+        allowed_tools=[
+            # All research tools from MCP server
+            "mcp__research__search_research",
+            "mcp__research__get_annotations",
+            "mcp__research__get_chapter_info",
+            "mcp__research__list_chapters",
+            "mcp__research__check_sync",
+            "mcp__research__get_scrivener_summary",
+            "mcp__research__compare_chapters",
+            "mcp__research__find_cross_chapter_themes",
+            "mcp__research__analyze_source_diversity",
+            "mcp__research__identify_key_sources",
+            "mcp__research__export_chapter_summary",
+            "mcp__research__generate_bibliography",
+        ],
+        model=model_name,
+        permission_mode="bypassPermissions",  # Auto-approve tool use
     )
 
-    return agent
+    return options
