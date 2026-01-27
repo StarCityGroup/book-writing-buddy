@@ -50,8 +50,7 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 - `/settings` - Check paths, connections, and configuration
 - `/knowledge` - View indexed data, summaries, and last update times
 - `/model` - Switch between model tiers (good/better/best)
-- `/history` - View past conversations
-- `/reindex [all|zotero|scrivener]` - Manually trigger re-indexing (close Zotero first!)
+- `/reindex` - Force complete re-indexing (stops services, clears data, rebuilds)
 - `/new` - Start fresh conversation
 - `/exit` - Exit the application
 

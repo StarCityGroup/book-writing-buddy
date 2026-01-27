@@ -56,15 +56,8 @@ class CommandHandler:
         elif command_lower == "/knowledge":
             self._show_knowledge()
 
-        elif command_lower.startswith("/reindex"):
-            parts = command_lower.split()
-            source = parts[1] if len(parts) > 1 else "all"
-            if source not in ["all", "zotero", "scrivener"]:
-                self.console.print(
-                    "\n[warning]Usage: /reindex [all|zotero|scrivener][/warning]\n"
-                )
-            else:
-                self._trigger_reindex(source)
+        elif command_lower == "/reindex":
+            self._trigger_reindex()
 
         elif command_lower == "/settings":
             self._show_diagnostics()
@@ -132,30 +125,32 @@ class CommandHandler:
         )
         self.console.print()
 
-    def _trigger_reindex(self, source: str):
-        """Trigger re-indexing."""
-        self.console.print(f"\n[header]Triggering {source} re-index...[/header]")
+    def _trigger_reindex(self):
+        """Trigger complete re-indexing by clearing data and restarting services."""
+        self.console.print("\n[header]Triggering complete re-index...[/header]")
         self.console.print(
             "[warning]Note: Close Zotero before indexing to avoid database locks![/warning]\n"
         )
 
-        # Trigger Docker indexer container
         import subprocess
 
         try:
-            if source == "all":
-                cmd = ["docker", "compose", "up", "index-all"]
-            elif source == "zotero":
-                cmd = ["docker", "compose", "up", "index-zotero"]
-            else:  # scrivener
-                cmd = ["docker", "compose", "up", "index-scrivener"]
+            # Stop services
+            self.console.print("[muted]Stopping services...[/muted]")
+            subprocess.run(["docker", "compose", "down"], check=True, capture_output=True)
 
-            self.console.print(f"[muted]Running: {' '.join(cmd)}[/muted]\n")
-            subprocess.run(cmd, check=True)
-            self.console.print("\n[success]✓ Indexing complete![/success]\n")
+            # Clear existing data
+            self.console.print("[muted]Clearing vector database...[/muted]")
+            subprocess.run(["rm", "-rf", "data/qdrant_storage/*"], shell=True, check=True)
+
+            # Rebuild and restart
+            self.console.print("[muted]Rebuilding and starting services...[/muted]")
+            subprocess.run(["docker", "compose", "up", "--build", "-d"], check=True, capture_output=True)
+
+            self.console.print("\n[success]✓ Re-index started! Check progress with: docker compose logs -f watcher[/success]\n")
 
         except subprocess.CalledProcessError as e:
-            self.console.print(f"\n[error]Indexing failed: {e}[/error]\n")
+            self.console.print(f"\n[error]Re-indexing failed: {e}[/error]\n")
         except Exception as e:
             self.console.print(f"\n[error]Error: {e}[/error]\n")
 
