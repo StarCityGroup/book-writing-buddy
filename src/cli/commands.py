@@ -134,9 +134,7 @@ class CommandHandler:
 
     def _trigger_reindex(self, source: str):
         """Trigger re-indexing."""
-        self.console.print(
-            f"\n[header]Triggering {source} re-index...[/header]"
-        )
+        self.console.print(f"\n[header]Triggering {source} re-index...[/header]")
         self.console.print(
             "[warning]Note: Close Zotero before indexing to avoid database locks![/warning]\n"
         )

@@ -54,9 +54,7 @@ class BookResearchChatCLI:
             self.rag = rag_instance
 
         # Initialize command handler now that we have RAG
-        self.commands = CommandHandler(
-            self.console, self.display, self.agent, self.rag
-        )
+        self.commands = CommandHandler(self.console, self.display, self.agent, self.rag)
 
         return True
 

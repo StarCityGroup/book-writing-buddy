@@ -162,24 +162,44 @@ def create_agent_options() -> ClaudeAgentOptions:
     Returns:
         ClaudeAgentOptions configured with research tools and system prompt
     """
-    # Get model from environment (handle LiteLLM format)
-    model_env = os.getenv("DEFAULT_MODEL", "claude-sonnet-4-5-20250514")
+    # Get LiteLLM proxy credentials from environment
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    api_base = os.getenv("OPENAI_API_BASE", "")
 
-    # Convert LiteLLM format (anthropic.claude-4.5-sonnet) to SDK format
-    if model_env.startswith("anthropic."):
-        model_env = model_env.replace("anthropic.", "")
+    # Determine if we're using LiteLLM proxy
+    using_litellm = bool(
+        api_base and ("litellm" in api_base.lower() or "cornell" in api_base.lower())
+    )
 
-    # Map common names to SDK format
-    model_mapping = {
-        "claude-4.5-haiku": "claude-haiku-4-5-20250514",
-        "claude-4.5-sonnet": "claude-sonnet-4-5-20250514",
-        "claude-4.5-opus": "claude-opus-4-5-20251001",
-    }
+    # Get model from environment
+    model_env = os.getenv("DEFAULT_MODEL", "anthropic.claude-4.5-sonnet")
 
-    model_name = model_mapping.get(model_env, model_env)
+    if using_litellm:
+        # When using LiteLLM, keep the full model name format
+        model_name = model_env
+    else:
+        # When using Anthropic directly, convert to SDK format
+        if model_env.startswith("anthropic."):
+            model_env = model_env.replace("anthropic.", "")
+
+        # Map common names to SDK format
+        model_mapping = {
+            "claude-4.5-haiku": "claude-haiku-4-5-20250514",
+            "claude-4.5-sonnet": "claude-sonnet-4-5-20250514",
+            "claude-4.5-opus": "claude-opus-4-5-20251001",
+        }
+        model_name = model_mapping.get(model_env, model_env)
 
     # Pre-initialize RAG to avoid parallel initialization race conditions
     initialize_rag()
+
+    # Prepare environment variables for SDK
+    # The SDK uses ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL
+    sdk_env = {}
+    if api_key:
+        sdk_env["ANTHROPIC_API_KEY"] = api_key
+    if api_base:
+        sdk_env["ANTHROPIC_BASE_URL"] = api_base
 
     # Create options with research MCP server
     options = ClaudeAgentOptions(
@@ -202,6 +222,7 @@ def create_agent_options() -> ClaudeAgentOptions:
         ],
         model=model_name,
         permission_mode="bypassPermissions",  # Auto-approve tool use
+        env=sdk_env,  # Pass LiteLLM proxy credentials
     )
 
     return options

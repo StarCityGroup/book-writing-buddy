@@ -185,9 +185,7 @@ async def compare_chapters(args: dict[str, Any]) -> dict[str, Any]:
     Shows which chapter has more sources, research density, etc.
     """
     rag = get_rag()
-    result = rag.compare_chapters(
-        chapter1=args["chapter1"], chapter2=args["chapter2"]
-    )
+    result = rag.compare_chapters(chapter1=args["chapter1"], chapter2=args["chapter2"])
     return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
 
 

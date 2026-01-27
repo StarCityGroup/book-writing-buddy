@@ -47,14 +47,14 @@ class ConnectionTester:
             # Simple test - list available models (lightweight call)
             # Note: This may not work with LiteLLM proxy, so we'll just verify client creation
             self.console.print(
-                f"[checkmark]✓[/checkmark] [muted]Connected to API"
+                "[checkmark]✓[/checkmark] [muted]Connected to API"
                 + (f" at {api_base}" if api_base else "")
                 + "[/muted]"
             )
             return True
 
         except Exception as e:
-            self.console.print(f"\n[cross]✗ Connection failed[/cross]")
+            self.console.print("\n[cross]✗ Connection failed[/cross]")
             self.console.print(f"[warning]Error: {str(e)}[/warning]\n")
             self.console.print("Please check your .env configuration:")
             self.console.print("  - OPENAI_API_KEY or ANTHROPIC_API_KEY")

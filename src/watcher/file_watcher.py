@@ -230,9 +230,13 @@ class FileWatcherDaemon:
         if scrivx_changed or has_deletions:
             # Structure changed or files deleted - run full sync to detect moves/deletions
             if scrivx_changed:
-                logger.info("Scrivener structure file (.scrivx) changed, running full sync")
+                logger.info(
+                    "Scrivener structure file (.scrivx) changed, running full sync"
+                )
             if has_deletions:
-                logger.info(f"Detected {sum(1 for p in changed_paths if not Path(p).exists())} deleted files, running sync")
+                logger.info(
+                    f"Detected {sum(1 for p in changed_paths if not Path(p).exists())} deleted files, running sync"
+                )
 
             try:
                 # Check if sync method exists (added in Phase 5)
