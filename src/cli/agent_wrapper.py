@@ -108,5 +108,13 @@ class AgentWrapper:
 
     def disconnect_sync(self):
         """Synchronous wrapper for disconnect."""
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.disconnect())
+        try:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(self.disconnect())
+        except RuntimeError as e:
+            # Handle anyio cancel scope errors during cleanup
+            if "cancel scope" in str(e):
+                # Cleanup already happened or context is invalid - just clear the client
+                self.client = None
+            else:
+                raise
