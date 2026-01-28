@@ -1,14 +1,14 @@
 """Claude Agent SDK tools for book research agent.
 
 These tools wrap BookRAG methods and provide direct access to the vector database
-and research capabilities via MCP (Model Context Protocol).
+and research capabilities.
 """
 
 import json
 import threading
 from typing import Any
 
-from claude_agent_sdk import create_sdk_mcp_server, tool
+from claude_agent_sdk import tool
 
 from .rag import BookRAG
 
@@ -285,25 +285,21 @@ async def generate_bibliography(args: dict[str, Any]) -> dict[str, Any]:
 
 
 # =============================================================================
-# MCP Server Configuration
+# Tool Registry
 # =============================================================================
 
-# Create SDK MCP server with all research tools
-research_server = create_sdk_mcp_server(
-    name="research",
-    version="1.0.0",
-    tools=[
-        search_research,
-        get_annotations,
-        get_chapter_info,
-        list_chapters,
-        check_sync,
-        get_scrivener_summary,
-        compare_chapters,
-        find_cross_chapter_themes,
-        analyze_source_diversity,
-        identify_key_sources,
-        export_chapter_summary,
-        generate_bibliography,
-    ],
-)
+# All research tools available to the agent
+ALL_TOOLS = [
+    search_research,
+    get_annotations,
+    get_chapter_info,
+    list_chapters,
+    check_sync,
+    get_scrivener_summary,
+    compare_chapters,
+    find_cross_chapter_themes,
+    analyze_source_diversity,
+    identify_key_sources,
+    export_chapter_summary,
+    generate_bibliography,
+]

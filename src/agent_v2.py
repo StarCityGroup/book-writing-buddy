@@ -1,6 +1,6 @@
 """Book research agent using Claude Agent SDK.
 
-This agent uses the Claude Agent SDK with custom MCP tools for research operations.
+This agent uses the Claude Agent SDK with custom tools for research operations.
 """
 
 import os
@@ -9,7 +9,8 @@ from pathlib import Path
 import structlog
 from claude_agent_sdk import ClaudeAgentOptions
 
-from .tools import initialize_rag, research_server
+from .tools import ALL_TOOLS, initialize_rag
+from .workflows import ALL_SKILLS
 
 logger = structlog.get_logger()
 
@@ -83,6 +84,20 @@ You can query this data using 12 powerful tools:
 **Export:**
 - export_chapter_summary: Generate research brief
 - generate_bibliography: Create citation list (APA/MLA/Chicago)
+
+# High-Level Skills
+
+You also have access to skills that orchestrate multiple tools for common workflows:
+
+- **analyze_chapter**: Run comprehensive chapter analysis (research, gaps, themes, sources)
+- **check_sync_workflow**: Check sync status and provide detailed recommendations
+- **research_gaps**: Identify chapters that need more research
+- **track_theme**: Follow a concept or theme across all chapters
+- **export_research**: Generate formatted research summary or bibliography
+
+Use skills for complex requests that require multiple tools. Use individual tools for targeted queries.
+When you invoke a skill, it will provide guidance on which tools to use next - follow that guidance
+to complete the workflow.
 
 # Book Context
 
@@ -201,25 +216,13 @@ def create_agent_options() -> ClaudeAgentOptions:
     if api_base:
         sdk_env["ANTHROPIC_BASE_URL"] = api_base
 
-    # Create options with research MCP server
+    # Combine tools and skills
+    all_tools = ALL_TOOLS + ALL_SKILLS
+
+    # Create options with direct tools (no MCP wrapper)
     options = ClaudeAgentOptions(
         system_prompt=SYSTEM_PROMPT,
-        mcp_servers={"research": research_server},
-        allowed_tools=[
-            # All research tools from MCP server
-            "mcp__research__search_research",
-            "mcp__research__get_annotations",
-            "mcp__research__get_chapter_info",
-            "mcp__research__list_chapters",
-            "mcp__research__check_sync",
-            "mcp__research__get_scrivener_summary",
-            "mcp__research__compare_chapters",
-            "mcp__research__find_cross_chapter_themes",
-            "mcp__research__analyze_source_diversity",
-            "mcp__research__identify_key_sources",
-            "mcp__research__export_chapter_summary",
-            "mcp__research__generate_bibliography",
-        ],
+        tools=all_tools,  # Direct tools, no MCP
         model=model_name,
         permission_mode="bypassPermissions",  # Auto-approve tool use
         env=sdk_env,  # Pass LiteLLM proxy credentials

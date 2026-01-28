@@ -94,9 +94,10 @@ The tool uses interactive terminal pickers (not command-line arguments):
 - **Scrivener Folder Picker**: Lists nested folders, user selects chapter folder
 - **Rationale**: Collections and folders aren't consistently named/numbered
 
-### MCP Server Usage
-- **Zotero MCP**: Read-only access to local database
-- **Filesystem MCP**: Read access to Scrivener project and this project directory
+### Tool Architecture
+- **Direct SDK Tools**: 12 core research tools provide direct access to vector database
+- **Workflow Skills**: 5 high-level skills orchestrate multiple tools for complex tasks
+- **No MCP Wrapper**: Tools use Claude Agent SDK directly for better performance
 - **Claude Analysis**: All materials are processed by Claude for deep analysis
 
 ### Output Format
@@ -225,11 +226,26 @@ Core dependencies (install with `uv sync`):
 
 ## Research Tools
 
-**Important**: This project does NOT use Claude Code skills. All research functionality is provided through custom tools in the TUI agent.
+The agent uses **Claude Agent SDK** with custom tools and workflow skills (no MCP wrapper).
+
+### Tool Categories
+
+**Core Tools (12):**
+- `search_research`, `get_annotations`, `get_chapter_info`, `list_chapters`
+- `check_sync`, `get_scrivener_summary`, `compare_chapters`
+- `find_cross_chapter_themes`, `analyze_source_diversity`, `identify_key_sources`
+- `export_chapter_summary`, `generate_bibliography`
+
+**Workflow Skills (5):**
+- `analyze_chapter` - Full chapter analysis workflow
+- `check_sync_workflow` - Sync check with recommendations
+- `research_gaps` - Identify chapters needing research
+- `track_theme` - Follow concepts across chapters
+- `export_research` - Generate formatted summaries
 
 ## TUI Agent Capabilities
 
-The interactive TUI agent (`uv run main.py`) provides natural language access to all research tools through a LangGraph-powered conversational interface.
+The interactive TUI agent (`uv run main.py`) provides natural language access to all research tools.
 
 ### Core Query Types
 
