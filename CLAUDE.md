@@ -175,8 +175,15 @@ Write to `output/chapter-{number}-analysis-{timestamp}.md` including:
 ### Before Running Skills
 - Close Zotero application (database lock conflict)
 - Start Qdrant: `docker compose up -d`
-- Ensure data is indexed (run indexer scripts if needed)
+- Ensure data is indexed (use `scripts/reindex.py` if needed)
 - Verify environment variable: `QDRANT_URL=http://localhost:6333`
+
+### Reindexing Data
+Use `scripts/reindex.py` for selective reindexing:
+- `--source zotero` - Reindex only Zotero (keeps Scrivener data)
+- `--source scrivener` - Reindex only Scrivener (keeps Zotero data)
+- `--source both` - Reindex both sources
+- `--force` - Delete existing data before reindexing
 
 ### Code Style
 - Use Python 3.8+ features

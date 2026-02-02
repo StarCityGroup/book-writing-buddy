@@ -331,13 +331,35 @@ The indexer container handles all indexing automatically:
 
 ### Manual Re-indexing
 
-To force a complete re-index:
+You can selectively reindex Zotero, Scrivener, or both using the reindex script:
+
+```bash
+# Reindex only Zotero (keeps Scrivener data intact)
+uv run scripts/reindex.py --source zotero
+
+# Reindex only Scrivener (keeps Zotero data intact)
+uv run scripts/reindex.py --source scrivener
+
+# Reindex both sources
+uv run scripts/reindex.py --source both
+
+# Force reindex (delete existing data before reindexing)
+uv run scripts/reindex.py --source zotero --force
+```
+
+**When to reindex each source:**
+
+- **Zotero only**: When you've added/moved items but haven't changed Scrivener
+- **Scrivener only**: When you've edited drafts but research hasn't changed
+- **Both**: After major structural changes to your book
+
+**Complete database reset** (if needed):
 
 ```bash
 # Stop services
 docker compose down
 
-# Clear existing data
+# Clear all existing data
 rm -rf data/qdrant_storage/*
 
 # Restart (will re-index everything)
