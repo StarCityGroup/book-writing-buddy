@@ -137,17 +137,27 @@ class CommandHandler:
         try:
             # Stop services
             self.console.print("[muted]Stopping services...[/muted]")
-            subprocess.run(["docker", "compose", "down"], check=True, capture_output=True)
+            subprocess.run(
+                ["docker", "compose", "down"], check=True, capture_output=True
+            )
 
             # Clear existing data
             self.console.print("[muted]Clearing vector database...[/muted]")
-            subprocess.run(["rm", "-rf", "data/qdrant_storage/*"], shell=True, check=True)
+            subprocess.run(
+                ["rm", "-rf", "data/qdrant_storage/*"], shell=True, check=True
+            )
 
             # Rebuild and restart
             self.console.print("[muted]Rebuilding and starting services...[/muted]")
-            subprocess.run(["docker", "compose", "up", "--build", "-d"], check=True, capture_output=True)
+            subprocess.run(
+                ["docker", "compose", "up", "--build", "-d"],
+                check=True,
+                capture_output=True,
+            )
 
-            self.console.print("\n[success]✓ Re-index started! Check progress with: docker compose logs -f watcher[/success]\n")
+            self.console.print(
+                "\n[success]✓ Re-index started! Check progress with: docker compose logs -f watcher[/success]\n"
+            )
 
         except subprocess.CalledProcessError as e:
             self.console.print(f"\n[error]Re-indexing failed: {e}[/error]\n")

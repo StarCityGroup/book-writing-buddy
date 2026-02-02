@@ -9,8 +9,8 @@ from pathlib import Path
 import structlog
 from claude_agent_sdk import ClaudeAgentOptions
 
+from .skill_loader import load_all_skills
 from .tools import ALL_TOOLS, initialize_rag
-from .workflows import ALL_SKILLS
 
 logger = structlog.get_logger()
 
@@ -216,8 +216,18 @@ def create_agent_options() -> ClaudeAgentOptions:
     if api_base:
         sdk_env["ANTHROPIC_BASE_URL"] = api_base
 
+    # Load workflow skills (from code + markdown files)
+    all_skills = load_all_skills()
+
     # Combine tools and skills
-    all_tools = ALL_TOOLS + ALL_SKILLS
+    all_tools = ALL_TOOLS + all_skills
+
+    logger.info(
+        "Agent tools loaded",
+        core_tools=len(ALL_TOOLS),
+        workflow_skills=len(all_skills),
+        total=len(all_tools),
+    )
 
     # Create options with direct tools (no MCP wrapper)
     options = ClaudeAgentOptions(
