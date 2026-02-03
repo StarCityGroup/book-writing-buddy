@@ -335,16 +335,16 @@ You can selectively reindex Zotero, Scrivener, or both using the reindex script:
 
 ```bash
 # Reindex only Zotero (keeps Scrivener data intact)
-uv run scripts/reindex.py --source zotero
+uv run --env-file .env scripts/reindex.py --source zotero
 
 # Reindex only Scrivener (keeps Zotero data intact)
-uv run scripts/reindex.py --source scrivener
+uv run --env-file .env scripts/reindex.py --source scrivener
 
 # Reindex both sources
-uv run scripts/reindex.py --source both
+uv run --env-file .env scripts/reindex.py --source both
 
 # Force reindex (delete existing data before reindexing)
-uv run scripts/reindex.py --source zotero --force
+uv run --env-file .env scripts/reindex.py --source zotero --force
 ```
 
 **When to reindex each source:**
