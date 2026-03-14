@@ -231,6 +231,14 @@ class ScrivenerIndexer:
         logger.warning("Folder-specific indexing not yet implemented")
         return 0
 
+    def _read_rtf(self, rtf_path: Path) -> str:
+        """Read an RTF file and convert to plain text, handling encoding issues."""
+        with open(rtf_path, "rb") as f:
+            raw = f.read()
+        rtf_content = raw.decode("utf-8", errors="surrogatepass")
+        rtf_content = rtf_content.encode("utf-8", errors="replace").decode("utf-8")
+        return rtf_to_text(rtf_content)
+
     def _compute_content_hash(self, text: str) -> str:
         """
         Compute MD5 hash of content for change detection.
@@ -246,12 +254,7 @@ class ScrivenerIndexer:
     def _index_document(self, rtf_path: Path) -> int:
         """Index a single Scrivener document"""
         try:
-            # Read RTF file
-            with open(rtf_path, "r", encoding="utf-8") as f:
-                rtf_content = f.read()
-
-            # Convert RTF to plain text
-            text = rtf_to_text(rtf_content)
+            text = self._read_rtf(rtf_path)
 
             if not text.strip():
                 return 0
@@ -425,10 +428,7 @@ class ScrivenerIndexer:
 
         for rtf_file in self.files_path.rglob("*.rtf"):
             try:
-                with open(rtf_file, "r", encoding="utf-8") as f:
-                    rtf_content = f.read()
-
-                text = rtf_to_text(rtf_content)
+                text = self._read_rtf(rtf_file)
                 chapter_num = self._extract_chapter_number(rtf_file, text)
 
                 if chapter_num == chapter_number:

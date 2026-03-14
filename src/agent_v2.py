@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 import structlog
-from claude_agent_sdk import ClaudeAgentOptions
+from claude_agent_sdk import ClaudeAgentOptions, create_sdk_mcp_server
 
 from .skill_loader import load_all_skills
 from .tools import ALL_TOOLS, initialize_rag
@@ -208,8 +208,26 @@ def create_agent_options() -> ClaudeAgentOptions:
     # Pre-initialize RAG to avoid parallel initialization race conditions
     initialize_rag()
 
-    # Prepare environment variables for SDK
-    # The SDK uses ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL
+    # CRITICAL: Set environment variables in os.environ BEFORE creating SDK client
+    # The SDK checks os.environ during transport auto-detection to decide whether
+    # to use API transport or CLI transport. If ANTHROPIC_API_KEY is not found,
+    # it falls back to subprocess CLI mode which expects tool names (strings),
+    # not tool objects.
+    logger.debug(
+        "Setting SDK environment variables",
+        has_api_key=bool(api_key),
+        has_api_base=bool(api_base),
+        api_key_prefix=api_key[:10] if api_key else None,
+        api_base=api_base,
+    )
+    if api_key:
+        os.environ["ANTHROPIC_API_KEY"] = api_key
+        logger.debug("Set ANTHROPIC_API_KEY in os.environ")
+    if api_base:
+        os.environ["ANTHROPIC_BASE_URL"] = api_base
+        logger.debug("Set ANTHROPIC_BASE_URL in os.environ")
+
+    # Also prepare env dict for ClaudeAgentOptions (belt and suspenders)
     sdk_env = {}
     if api_key:
         sdk_env["ANTHROPIC_API_KEY"] = api_key
@@ -229,10 +247,19 @@ def create_agent_options() -> ClaudeAgentOptions:
         total=len(all_tools),
     )
 
-    # Create options with direct tools (no MCP wrapper)
+    # CRITICAL: SdkMcpTools (created by @tool decorator) must be wrapped in an MCP server
+    # They cannot be passed directly to the tools parameter
+    custom_server = create_sdk_mcp_server(
+        name="book-research",
+        version="1.0.0",
+        tools=all_tools,  # All @tool decorated functions go here
+    )
+
+    # Create agent options with MCP server containing custom tools
     options = ClaudeAgentOptions(
         system_prompt=SYSTEM_PROMPT,
-        tools=all_tools,  # Direct tools, no MCP
+        mcp_servers={"book-research": custom_server},  # MCP server goes here
+        allowed_tools=["mcp__book-research__*"],  # Allow all tools from this server
         model=model_name,
         permission_mode="bypassPermissions",  # Auto-approve tool use
         env=sdk_env,  # Pass LiteLLM proxy credentials

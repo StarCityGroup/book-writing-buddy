@@ -18,7 +18,10 @@ from qdrant_client.models import (
     PointStruct,
     VectorParams,
 )
-from sentence_transformers import SentenceTransformer
+
+# Lazy import - SentenceTransformer loads PyTorch which takes 10+ seconds
+# Only import when actually needed (in embedder property)
+# from sentence_transformers import SentenceTransformer
 
 logger = structlog.get_logger()
 
@@ -80,6 +83,9 @@ class VectorDBClient:
             with self._embedder_lock:
                 # Double-check pattern to prevent race conditions
                 if self._embedder is None:
+                    # Lazy import - only load PyTorch when actually needed
+                    from sentence_transformers import SentenceTransformer
+
                     if self.model_cache_dir:
                         logger.info(
                             f"Loading embedding model: {self.embedding_model_name} "

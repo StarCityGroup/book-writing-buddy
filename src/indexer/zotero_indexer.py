@@ -175,26 +175,26 @@ class ZoteroIndexer:
             WHERE ci.collectionID = ?
         """
 
-        cursor.execute(query, (collection_id,))
         items = []
-
-        for (
-            item_id,
-            key,
-            title,
-            attachment_path,
-            attachment_id,
-            attachment_key,
-        ) in cursor.fetchall():
-            items.append(
-                {
-                    "id": item_id,
-                    "key": key,
-                    "title": title or "Untitled",
-                    "attachment_path": attachment_path,
-                    "attachment_key": attachment_key,  # Key of the attachment item, not parent
-                }
-            )
+        try:
+            cursor.execute(query, (collection_id,))
+            for row in cursor:
+                try:
+                    item_id, key, title, attachment_path, attachment_id, attachment_key = row
+                    items.append(
+                        {
+                            "id": item_id,
+                            "key": key,
+                            "title": title or "Untitled",
+                            "attachment_path": attachment_path,
+                            "attachment_key": attachment_key,
+                        }
+                    )
+                except (sqlite3.DatabaseError, ValueError) as e:
+                    logger.warning(f"Skipping corrupted row in collection {collection_id}: {e}")
+                    continue
+        except sqlite3.DatabaseError as e:
+            logger.error(f"Database error reading collection {collection_id}: {e}")
 
         conn.close()
         return items

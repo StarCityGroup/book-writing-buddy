@@ -54,6 +54,8 @@ Welcome! I'm your AI research assistant for analyzing your Zotero research libra
 - `/new` - Start fresh conversation
 - `/exit` - Exit the application
 
+**Running in Docker?** Detach without stopping: `Ctrl-p Ctrl-q`
+
 **Just ask a question to get started!** Examples:
 - "Track the theme 'infrastructure failure' across all chapters"
 - "Compare research density between chapters 5 and 9"
