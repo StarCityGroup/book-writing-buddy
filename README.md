@@ -47,7 +47,7 @@ cp data/outline.example.txt data/outline.txt
 docker compose up --build -d
 
 # Check logs to see indexing progress
-docker compose logs -f indexer
+docker compose logs -f watcher
 
 # You're ready! Start the TUI agent
 uv run main.py
@@ -109,8 +109,8 @@ The agent **autonomously decides** which tools to use, can call multiple tools, 
 └─────────────────────────────────────────┘
           ↓ (read-only mount)
 ┌─────────────────────────────────────────┐
-│  Docker: book-research-indexer         │
-│  ├─ Watches files for changes          │
+│  Docker: watcher container             │
+│  ├─ Watches files for changes (5s)     │
 │  ├─ Extracts text & chunks it          │
 │  ├─ Generates embeddings               │
 │  └─ Stores in Qdrant                   │
@@ -120,9 +120,9 @@ The agent **autonomously decides** which tools to use, can call multiple tools, 
 │  Docker: Qdrant (port 6333)            │
 │  └─ Vector database with embeddings    │
 └─────────────────────────────────────────┘
-          ↓ (query via BookRAG)
+          ↓ (query via VectorDBClient)
 ┌─────────────────────────────────────────┐
-│  TUI Agent (LangGraph ReAct)           │
+│  Local: TUI Agent (Claude SDK)         │
 │  └─ 12 research tools                  │
 │  └─ Autonomous research loop           │
 └─────────────────────────────────────────┘
@@ -323,11 +323,30 @@ Perfect for preparing reference materials before writing sessions.
 
 ### Automatic Indexing
 
-The indexer container handles all indexing automatically:
+The watcher container handles all indexing automatically:
 
-- **Initial**: Indexes everything on first startup
-- **Watching**: Monitors Zotero and Scrivener for changes
+- **Initial**: Indexes everything on first startup (~5-6 minutes for typical project)
+- **Watching**: Monitors Zotero and Scrivener for changes using filesystem events
 - **Re-indexing**: Automatically re-indexes changed files (5-second debounce)
+
+**How the file watcher works:**
+
+1. **On startup**: Full index of all Zotero and Scrivener content
+2. **Watches these locations**:
+   - `$ZOTERO_PATH/storage/` - PDF files and attachments
+   - `$SCRIVENER_PROJECT_PATH/Files/Data/` - RTF document files
+   - `$SCRIVENER_PROJECT_PATH/*.scrivx` - Project structure file
+3. **When files change**:
+   - Waits 5 seconds for batch of changes to settle (debounce)
+   - Re-indexes affected documents
+   - Updates vector database incrementally
+4. **What triggers re-indexing**:
+   - Adding/editing PDFs in Zotero storage
+   - Editing drafts in Scrivener
+   - Moving items between Zotero collections
+   - Restructuring chapters in Scrivener
+
+**No manual action needed** - just work normally in Zotero and Scrivener!
 
 ### Manual Re-indexing
 
@@ -372,11 +391,11 @@ docker compose logs -f indexer
 ### Check Indexing Status
 
 ```bash
-# View indexer logs
-docker compose logs indexer
+# View watcher logs
+docker compose logs watcher
 
 # Check if indexing is complete (look for "Starting file watcher daemon")
-docker compose logs indexer | tail -20
+docker compose logs watcher | tail -20
 
 # Check collection size
 curl http://localhost:6333/collections/book_research | jq
@@ -386,8 +405,8 @@ curl http://localhost:6333/collections/book_research | jq
 
 ### View Logs
 ```bash
-# Indexer logs
-docker compose logs -f indexer
+# Watcher logs
+docker compose logs -f watcher
 
 # Qdrant logs
 docker compose logs -f qdrant
@@ -404,8 +423,8 @@ docker compose down
 # Start everything
 docker compose up -d
 
-# Restart just the indexer
-docker compose restart indexer
+# Restart just the watcher
+docker compose restart watcher
 ```
 
 ### Check What's Running
@@ -427,7 +446,7 @@ As you revise your book, chapter structure evolves. Keep these three sources ali
 
 1. Update Zotero collections to match (rename, renumber, merge as needed)
 2. Update `data/outline.txt` with new structure
-3. Re-index if chapter numbers changed: `docker compose restart indexer`
+3. Re-index if chapter numbers changed: `docker compose restart watcher`
 
 ### Check Sync Status
 
@@ -465,9 +484,9 @@ This reports:
 
 ### "No results found"
 **Cause:** Database not indexed yet
-**Fix:** Check indexer logs: `docker compose logs indexer`
+**Fix:** Check watcher logs: `docker compose logs watcher`
 
-### "Indexer not starting"
+### "Watcher not starting"
 **Cause:** Missing .env file or incorrect paths
 **Fix:** Verify `.env` has correct paths to Zotero and Scrivener
 
@@ -484,32 +503,38 @@ This reports:
 ```
 book-writing-buddy/
 ├── README.md
-├── CLAUDE.md                  # Project context for AI agent
-├── docker-compose.yml         # Qdrant + Indexer containers
-├── pyproject.toml            # Python dependencies (uv)
-├── main.py                   # TUI agent entry point
+├── CLAUDE.md                      # Project context for AI agent
+├── docker-compose.yml             # Qdrant + Watcher containers
+├── Dockerfile                     # Watcher container build
+├── pyproject.toml                # Python dependencies (uv)
+├── main.py                       # TUI agent entry point (runs locally)
 ├── config/
-│   └── default.json          # Embedding & chunking settings
+│   └── default.json              # Embedding & chunking settings
 ├── src/
-│   ├── agent_v2.py           # ReAct agent (LangGraph)
-│   ├── tools.py              # 12 research tools
-│   ├── cli.py                # Interactive TUI
-│   ├── rag.py                # BookRAG query interface
-│   ├── indexer/              # Indexing logic
+│   ├── agent_v2.py               # Claude SDK agent
+│   ├── tools.py                  # 12 research tools (@tool decorated)
+│   ├── cli/                      # Interactive TUI
+│   │   ├── __init__.py
+│   │   ├── agent_wrapper.py      # SDK client wrapper
+│   │   └── display.py            # UI components
+│   ├── indexer/                  # Indexing logic
 │   │   ├── zotero_indexer.py
 │   │   ├── scrivener_indexer.py
 │   │   └── run_initial_index.py
-│   ├── watcher/              # File watching daemon
+│   ├── watcher/                  # File watching daemon
 │   │   └── run_daemon.py
 │   ├── vectordb/
-│   │   └── client.py         # Qdrant wrapper
-│   └── scrivener_parser.py   # .scrivx structure parser
+│   │   └── client.py             # Qdrant wrapper
+│   └── scrivener_parser.py       # .scrivx structure parser
+├── scripts/
+│   └── reindex.py                # Manual reindexing utility
 ├── data/
-│   ├── outline.txt           # Book context (optional)
-│   └── qdrant_storage/       # Vector database (gitignored)
+│   ├── outline.txt               # Book context (optional)
+│   └── qdrant_storage/           # Vector database (gitignored)
 └── docs/
-    ├── ARCHITECTURE_V2.md    # Technical architecture
-    └── MIGRATION_COMPLETE.md # V1 → V2 migration notes
+    ├── ARCHITECTURE_V2.md        # Technical architecture
+    ├── MIGRATION_COMPLETE.md     # V1 → V2 migration notes
+    └── SYNCING.md                # Keeping sources in sync
 ```
 
 ## Performance

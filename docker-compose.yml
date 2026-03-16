@@ -8,48 +8,43 @@ services:
       - ./data/qdrant_storage:/qdrant/storage
     restart: unless-stopped
 
-  # Watcher container disabled - run CLI locally instead
-  # The local CLI connects to Qdrant at localhost:6333
-  # Use: uv run python main.py
-  # Or alias: bwb
-  #
-  # watcher:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: book-research-watcher
-  #   depends_on:
-  #     - qdrant
-  #   volumes:
-  #     # User's data directories (read-only)
-  #     - ${ZOTERO_PATH}:/mnt/zotero:ro
-  #     - ${SCRIVENER_PROJECT_PATH}:/mnt/scrivener:ro
-  #
-  #     # Persistent storage for logs and output
-  #     - ./data/logs:/data/logs
-  #     - ./output:/app/output
-  #
-  #     # Configuration files
-  #     - ./config:/app/config:ro
-  #
-  #     # Local model cache for offline operation
-  #     - ./data/models:/models:ro
-  #
-  #   environment:
-  #     - QDRANT_URL=http://qdrant:6333
-  #     - ZOTERO_PATH=/mnt/zotero
-  #     - ZOTERO_ROOT_COLLECTION=${ZOTERO_ROOT_COLLECTION:-}
-  #     - SCRIVENER_PATH=/mnt/scrivener
-  #     - SCRIVENER_MANUSCRIPT_FOLDER=${SCRIVENER_MANUSCRIPT_FOLDER:-}
-  #     - MODEL_CACHE_DIR=/models
-  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
-  #     - OPENAI_API_BASE=${OPENAI_API_BASE}
-  #     # Claude SDK needs ANTHROPIC_API_KEY for transport detection
-  #     - ANTHROPIC_API_KEY=${OPENAI_API_KEY}
-  #     - ANTHROPIC_BASE_URL=${OPENAI_API_BASE}
-  #     - DEFAULT_MODEL=${DEFAULT_MODEL:-anthropic.claude-4.5-sonnet}
-  #     - MODEL_GOOD=${MODEL_GOOD:-}
-  #     - MODEL_BETTER=${MODEL_BETTER:-}
-  #     - MODEL_BEST=${MODEL_BEST:-}
-  #
-  #   restart: unless-stopped
+  watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: book-research-watcher
+    depends_on:
+      - qdrant
+    volumes:
+      # User's data directories (read-only)
+      - ${ZOTERO_PATH}:/mnt/zotero:ro
+      - ${SCRIVENER_PROJECT_PATH}:/mnt/scrivener:ro
+
+      # Persistent storage for logs and output
+      - ./data/logs:/data/logs
+      - ./output:/app/output
+
+      # Configuration files
+      - ./config:/app/config:ro
+
+      # Local model cache for offline operation
+      - ./data/models:/models:ro
+
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - ZOTERO_PATH=/mnt/zotero
+      - ZOTERO_ROOT_COLLECTION=${ZOTERO_ROOT_COLLECTION:-}
+      - SCRIVENER_PATH=/mnt/scrivener
+      - SCRIVENER_MANUSCRIPT_FOLDER=${SCRIVENER_MANUSCRIPT_FOLDER:-}
+      - MODEL_CACHE_DIR=/models
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_BASE=${OPENAI_API_BASE}
+      # Claude SDK needs ANTHROPIC_API_KEY for transport detection
+      - ANTHROPIC_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_BASE_URL=${OPENAI_API_BASE}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-anthropic.claude-4.5-sonnet}
+      - MODEL_GOOD=${MODEL_GOOD:-}
+      - MODEL_BETTER=${MODEL_BETTER:-}
+      - MODEL_BEST=${MODEL_BEST:-}
+
+    restart: unless-stopped

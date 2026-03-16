@@ -181,8 +181,12 @@ class ScrivenerParser:
                             propagate_chapter_number(chapter, chapter_counter)
             # Or if it's a standalone item at level 0 (like Preface or Introduction)
             elif title and title not in ["untitled", ""]:
-                # Check if this is a chapter 0 item
-                if title in chapter_zero_names:
+                # Check if this is a chapter 0 item (matches even with subtitles like "Introduction: The Code of Cool")
+                is_chapter_zero = any(
+                    title.startswith(name) or title.startswith(f"{name}:")
+                    for name in chapter_zero_names
+                )
+                if is_chapter_zero:
                     chapter_zero_items.append(item)
                 else:
                     chapter_counter += 1
